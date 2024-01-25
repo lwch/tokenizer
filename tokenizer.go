@@ -48,7 +48,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, size int) (<-chan map[string]int, error) {
 	var readers []io.ReadCloser
 	for _, file := range files {
 		fi, err := os.Stat(file)
@@ -75,57 +75,64 @@ func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error)
 	return t.TrainReaders(readers, size), nil
 }
 
-func (t *Tokenizer) Train(str string, size int) map[string]int {
+func (t *Tokenizer) Train(str string, size int) <-chan map[string]int {
 	r := strings.NewReader(str)
 	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, size)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int) map[string]int {
-	wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
-	var wg sync.WaitGroup
-	wg.Add(len(readers))
-	var readen atomic.Uint64
-	var pending atomic.Int64
-	pending.Add(int64(len(readers)))
-	for i, r := range readers {
-		go func(i int, r io.ReadCloser) {
-			defer wg.Done()
-			defer r.Close()
-			cnt := getWords(r, wds)
-			readen.Add(uint64(cnt))
-			pending.Add(-1)
-			logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
-		}(i, r)
-	}
-	wg.Wait()
-	logging.Info("vocab size: %d", wds.Size())
-	tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
-	logging.Info("got %d tokens of rune", len(tokens))
-	if len(tokens) >= size {
-		return tokens
-	}
-	var i int
-	for {
-		i++
-		stats := getStats(wds) // {{d,e}: 5, {e,p}: 5, ...}
-		logging.Info("round %d, stats size: %d", i, len(stats))
-		if len(stats) == 0 {
-			return tokens
+func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int) <-chan map[string]int {
+	ch := make(chan map[string]int)
+	go func() {
+		defer close(ch)
+		wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
+		var wg sync.WaitGroup
+		wg.Add(len(readers))
+		var readen atomic.Uint64
+		var pending atomic.Int64
+		pending.Add(int64(len(readers)))
+		for i, r := range readers {
+			go func(i int, r io.ReadCloser) {
+				defer wg.Done()
+				defer r.Close()
+				cnt := getWords(r, wds)
+				readen.Add(uint64(cnt))
+				pending.Add(-1)
+				logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
+			}(i, r)
 		}
-		bests := bestStats(stats, size-len(tokens)) // {d,e}, ...
-		var logs []string
-		for _, best := range bests {
-			logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
-		}
-		logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
-		wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
-		logging.Info("round %d, vocab size: %d", i, wds.Size())
-		tokens = getTokens(wds) // {de: 5, e: 8, p: 5, ...}
-		logging.Info("round %d, got %d tokens", i, len(tokens))
+		wg.Wait()
+		logging.Info("vocab size: %d", wds.Size())
+		tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
+		logging.Info("got %d tokens of rune", len(tokens))
+		ch <- tokens
 		if len(tokens) >= size {
-			return tokens
+			return
 		}
-	}
+		var i int
+		for {
+			i++
+			stats := getStats(wds) // {{d,e}: 5, {e,p}: 5, ...}
+			logging.Info("round %d, stats size: %d", i, len(stats))
+			if len(stats) == 0 {
+				return
+			}
+			bests := bestStats(stats, size-len(tokens)) // {d,e}, ...
+			var logs []string
+			for _, best := range bests {
+				logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
+			}
+			logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
+			wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
+			logging.Info("round %d, vocab size: %d", i, wds.Size())
+			tokens = getTokens(wds) // {de: 5, e: 8, p: 5, ...}
+			logging.Info("round %d, got %d tokens", i, len(tokens))
+			ch <- tokens
+			if len(tokens) >= size {
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 func getWords(r io.Reader, wds *words) int {
