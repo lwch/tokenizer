@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -143,42 +144,55 @@ func getWords(r io.Reader, wds *words) int {
 	return cnt
 }
 
+type pair struct {
+	block string
+	freq  int
+}
+
+func parallel(wds *words, fn func(p pair)) {
+	var wg sync.WaitGroup
+	ch := make(chan pair)
+	worker := func() {
+		defer wg.Done()
+		for p := range ch {
+			fn(p)
+		}
+	}
+	wg.Add(runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go worker()
+	}
+	wds.Range(func(block string, freq int) {
+		ch <- pair{block, freq}
+	})
+	close(ch)
+	wg.Wait()
+}
+
 func getTokens(wds *words) map[string]int {
 	ret := make(map[string]int)
-	var wg sync.WaitGroup
 	var m sync.Mutex
-	wds.Range(func(block string, freq int) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for _, ch := range strings.Split(block, " ") {
-				m.Lock()
-				ret[string(ch)] += freq
-				m.Unlock()
-			}
-		}()
+	parallel(wds, func(p pair) {
+		for _, ch := range strings.Split(p.block, " ") {
+			m.Lock()
+			ret[string(ch)] += p.freq
+			m.Unlock()
+		}
 	})
-	wg.Wait()
 	return ret
 }
 
 func getStats(wds *words) map[vocab]int {
 	ret := make(map[vocab]int)
-	var wg sync.WaitGroup
 	var m sync.Mutex
-	wds.Range(func(block string, freq int) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			tks := strings.Split(block, " ")
-			for i := 0; i < len(tks)-1; i++ {
-				m.Lock()
-				ret[vocab{word: string(tks[i]), next: tks[i+1]}] += freq
-				m.Unlock()
-			}
-		}()
+	parallel(wds, func(p pair) {
+		tks := strings.Split(p.block, " ")
+		for i := 0; i < len(tks)-1; i++ {
+			m.Lock()
+			ret[vocab{word: string(tks[i]), next: tks[i+1]}] += p.freq
+			m.Unlock()
+		}
 	})
-	wg.Wait()
 	return ret
 }
 
@@ -196,21 +210,17 @@ func mergeVocab(wds *words, best vocab) *words {
 	find := best.word + " " + best.next
 	replace := best.word + best.next
 	ret := newWords()
-	var wg sync.WaitGroup
-	wds.Range(func(block string, freq int) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				tmp := strings.ReplaceAll(block, find, replace)
-				if len(tmp) == len(block) {
-					break
-				}
-				block = tmp
+
+	parallel(wds, func(p pair) {
+		block := p.block
+		for {
+			tmp := strings.ReplaceAll(block, find, replace)
+			if len(tmp) == len(block) {
+				break
 			}
-			ret.Set(block, freq)
-		}()
+			block = tmp
+		}
+		ret.Set(block, p.freq)
 	})
-	wg.Wait()
 	return ret
 }
