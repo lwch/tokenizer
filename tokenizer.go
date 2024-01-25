@@ -26,8 +26,28 @@ type vocab struct {
 	next word
 }
 
+type limitReader struct {
+	f *os.File
+	r io.Reader
+}
+
+func newLimitReader(f *os.File, n int64) *limitReader {
+	return &limitReader{
+		f: f,
+		r: io.LimitReader(f, n),
+	}
+}
+
+func (r *limitReader) Read(p []byte) (int, error) {
+	return r.r.Read(p)
+}
+
+func (r *limitReader) Close() error {
+	return r.f.Close()
+}
+
 func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error) {
-	var readers []io.Reader
+	var readers []io.ReadCloser
 	for _, file := range files {
 		fi, err := os.Stat(file)
 		if err != nil {
@@ -47,7 +67,7 @@ func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error)
 			if err != nil {
 				return nil, err
 			}
-			readers = append(readers, io.LimitReader(f, readBlockSize))
+			readers = append(readers, newLimitReader(f, readBlockSize))
 		}
 	}
 	return t.TrainReaders(readers, size), nil
@@ -55,10 +75,10 @@ func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error)
 
 func (t *Tokenizer) Train(str string, size int) map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.Reader{r}, size)
+	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, size)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int) map[string]int {
 	wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
 	var wg sync.WaitGroup
 	wg.Add(len(readers))
@@ -66,8 +86,9 @@ func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	var pending atomic.Int64
 	pending.Add(int64(len(readers)))
 	for i, r := range readers {
-		go func(i int, r io.Reader) {
+		go func(i int, r io.ReadCloser) {
 			defer wg.Done()
+			defer r.Close()
 			cnt := getWords(r, wds)
 			readen.Add(uint64(cnt))
 			pending.Add(-1)
