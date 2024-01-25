@@ -2,9 +2,11 @@ package tokenizer
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -110,9 +112,13 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int) map[string]i
 		if len(stats) == 0 {
 			return tokens
 		}
-		best := bestStat(stats) // {d,e}
-		logging.Info("round %d, found best stat: {%s, %s}", i, best.word, best.next)
-		wds = mergeVocab(wds, best) // {de e p: 5, l e a r n i n g: 3, ...}
+		bests := bestStats(stats, size-len(tokens)) // {d,e}, ...
+		var logs []string
+		for _, best := range bests {
+			logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
+		}
+		logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
+		wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
 		logging.Info("round %d, vocab size: %d", i, wds.Size())
 		tokens = getTokens(wds) // {de: 5, e: 8, p: 5, ...}
 		logging.Info("round %d, got %d tokens", i, len(tokens))
@@ -228,21 +234,44 @@ func getStats(wds *words) map[vocab]int {
 	return ret
 }
 
-func bestStat(stats map[vocab]int) vocab {
-	var ret vocab
+func bestStats(stats map[vocab]int, size int) []vocab {
+	type pair struct {
+		voc  vocab
+		freq int
+	}
+	arr := make([]pair, 0, len(stats))
 	for v, f := range stats {
-		if f > stats[ret] {
-			ret = v
+		arr = append(arr, pair{v, f})
+	}
+	sort.Slice(arr, func(i, j int) bool {
+		return arr[i].freq > arr[j].freq
+	})
+	var ret []vocab
+	prefix := make(map[word]struct{})
+	for i := 0; i < size; i++ {
+		if _, ok := prefix[arr[i].voc.word]; ok {
+			return ret
 		}
+		ret = append(ret, arr[i].voc)
+		prefix[arr[i].voc.word] = struct{}{}
 	}
 	return ret
 }
 
-func mergeVocab(wds *words, best vocab) *words {
+func mergeVocab(wds *words, bests []vocab) *words {
 	ret := newWords()
 	parallel(wds, func(_ int, p pair) {
 		block := p.block
-		for block.Merge(best.word, best.next) {
+		for {
+			changed := false
+			for _, best := range bests {
+				for block.Merge(best.word, best.next) {
+					changed = true
+				}
+			}
+			if !changed {
+				break
+			}
 		}
 		ret.Set(block, p.freq)
 	})
