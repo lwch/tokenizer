@@ -150,15 +150,14 @@ func getWords(r io.Reader, wds *words) int {
 		for _, ch := range str {
 			cnt++
 			switch ch {
-			case ' ', ',', '.', '?', '!', '\n', // 英文分词
-				'，', '。', '？', '！': // 中文分词
+			case ' ', ',', '.', '?', '!', '<', '>', '[', ']', '{', '}', '(', ')', '+', '-', '*', '/', '=', '^', '&', '%', '$', '#', '`', '\\', '|', '"', '\'', '\r', '\n', // 英文分词
+				'，', '。', '？', '！', '《', '》', '【', '】', '「', '」', '『', '』', '…', '·', '“', '”', '‘', '’', '、': // 中文分词
 				if len(tmp) == 0 {
 					continue
 				}
 				wds.Put(buildBlock(tmp))
 				tmp = tmp[:0]
-			}
-			if ch != '\r' && ch != '\n' && ch != ' ' {
+			default:
 				tmp = append(tmp, ch)
 			}
 			if len(tmp) >= maxSeq {
