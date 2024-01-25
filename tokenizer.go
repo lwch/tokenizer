@@ -172,8 +172,8 @@ func getTokens(wds *words) map[string]int {
 	}
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
-		for i := 0; i < n; i++ {
-			str := p.block.Get(i).String()
+		for j := 0; j < n; j++ {
+			str := p.block.Get(j).String()
 			mps[i][str] += p.freq
 		}
 	})
@@ -193,8 +193,8 @@ func getStats(wds *words) map[vocab]int {
 	}
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
-		for i := 0; i < n-1; i++ {
-			key := vocab{word: p.block.Get(i), next: p.block.Get(i + 1)}
+		for j := 0; j < n-1; j++ {
+			key := vocab{word: p.block.Get(j), next: p.block.Get(j + 1)}
 			mps[i][key] += p.freq
 		}
 	})
