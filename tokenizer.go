@@ -63,8 +63,8 @@ func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	for i, r := range readers {
 		go func(i int, r io.Reader) {
 			defer wg.Done()
-			getWords(r, wds)
-			logging.Info("reader %d done", i)
+			cnt := getWords(r, wds)
+			logging.Info("reader %d done, %d rune readen", i, cnt)
 		}(i, r)
 	}
 	wg.Wait()
@@ -103,9 +103,10 @@ func buildBlock(str string) string {
 	return strings.Join(tmp, " ")
 }
 
-func getWords(r io.Reader, wds *words) {
+func getWords(r io.Reader, wds *words) int {
 	rd := bufio.NewReader(r)
 	var tmp string
+	var cnt int
 	for {
 		ch, _, err := rd.ReadRune()
 		if err != nil {
@@ -113,8 +114,9 @@ func getWords(r io.Reader, wds *words) {
 				break
 			}
 			logging.Error("read rune: %v", err)
-			return
+			return cnt
 		}
+		cnt++
 		switch ch {
 		case ' ', ',', '.', '?', '!', '\n': // 英文分词
 			if len(tmp) > 0 {
@@ -132,6 +134,7 @@ func getWords(r io.Reader, wds *words) {
 	if len(tmp) > 0 {
 		wds.Put(buildBlock(tmp))
 	}
+	return cnt
 }
 
 func getTokens(wds *words) map[string]int {
