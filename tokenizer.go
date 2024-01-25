@@ -143,20 +143,20 @@ type pair struct {
 	freq  int
 }
 
-func parallel(wds *words, fn func(p pair)) {
+func parallel(wds *words, fn func(i int, p pair)) {
 	var wg sync.WaitGroup
 	ch := make(chan pair)
-	worker := func() {
+	worker := func(i int) {
 		defer wg.Done()
 		for p := range ch {
-			fn(p)
+			fn(i, p)
 		}
 	}
 	n := runtime.NumCPU()
 	// n := 1
 	wg.Add(n)
 	for i := 0; i < n; i++ {
-		go worker()
+		go worker(i)
 	}
 	wds.Range(func(b block, freq int) {
 		ch <- pair{b, freq}
@@ -166,32 +166,38 @@ func parallel(wds *words, fn func(p pair)) {
 }
 
 func getTokens(wds *words) map[string]int {
-	ret := make(map[string]int)
-	var m sync.Mutex
-	parallel(wds, func(p pair) {
+	mps := make([]map[string]int, runtime.NumCPU())
+	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for i := 0; i < n; i++ {
 			str := p.block.Get(i).String()
-			m.Lock()
-			ret[str] += p.freq
-			m.Unlock()
+			mps[i][str] += p.freq
 		}
 	})
+	ret := make(map[string]int)
+	for _, mp := range mps {
+		for k, v := range mp {
+			ret[k] += v
+		}
+	}
 	return ret
 }
 
 func getStats(wds *words) map[vocab]int {
-	ret := make(map[vocab]int)
-	var m sync.Mutex
-	parallel(wds, func(p pair) {
+	mps := make([]map[vocab]int, runtime.NumCPU())
+	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for i := 0; i < n-1; i++ {
 			key := vocab{word: p.block.Get(i), next: p.block.Get(i + 1)}
-			m.Lock()
-			ret[key] += p.freq
-			m.Unlock()
+			mps[i][key] += p.freq
 		}
 	})
+	ret := make(map[vocab]int)
+	for _, mp := range mps {
+		for k, v := range mp {
+			ret[k] += v
+		}
+	}
 	return ret
 }
 
@@ -207,7 +213,7 @@ func bestStat(stats map[vocab]int) vocab {
 
 func mergeVocab(wds *words, best vocab) *words {
 	ret := newWords()
-	parallel(wds, func(p pair) {
+	parallel(wds, func(_ int, p pair) {
 		block := p.block
 		for block.Merge(best.word, best.next) {
 		}
