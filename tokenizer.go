@@ -143,22 +143,40 @@ func getWords(r io.Reader, wds *words) int {
 
 func getTokens(wds *words) map[string]int {
 	ret := make(map[string]int)
+	var wg sync.WaitGroup
+	var m sync.Mutex
 	wds.Range(func(block string, freq int) {
-		for _, ch := range strings.Split(block, " ") {
-			ret[string(ch)] += freq
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, ch := range strings.Split(block, " ") {
+				m.Lock()
+				ret[string(ch)] += freq
+				m.Unlock()
+			}
+		}()
 	})
+	wg.Wait()
 	return ret
 }
 
 func getStats(wds *words) map[vocab]int {
 	ret := make(map[vocab]int)
+	var wg sync.WaitGroup
+	var m sync.Mutex
 	wds.Range(func(block string, freq int) {
-		tks := strings.Split(block, " ")
-		for i := 0; i < len(tks)-1; i++ {
-			ret[vocab{word: string(tks[i]), next: tks[i+1]}] += freq
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tks := strings.Split(block, " ")
+			for i := 0; i < len(tks)-1; i++ {
+				m.Lock()
+				ret[vocab{word: string(tks[i]), next: tks[i+1]}] += freq
+				m.Unlock()
+			}
+		}()
 	})
+	wg.Wait()
 	return ret
 }
 
@@ -176,15 +194,21 @@ func mergeVocab(wds *words, best vocab) *words {
 	find := best.word + " " + best.next
 	replace := best.word + best.next
 	ret := newWords()
+	var wg sync.WaitGroup
 	wds.Range(func(block string, freq int) {
-		for {
-			tmp := strings.ReplaceAll(block, find, replace)
-			if len(tmp) == len(block) {
-				break
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				tmp := strings.ReplaceAll(block, find, replace)
+				if len(tmp) == len(block) {
+					break
+				}
+				block = tmp
 			}
-			block = tmp
-		}
-		ret.Set(block, freq)
+			ret.Set(block, freq)
+		}()
 	})
+	wg.Wait()
 	return ret
 }
