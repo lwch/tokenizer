@@ -113,13 +113,6 @@ func getWords(r io.Reader, wds *words) int {
 	var cnt int
 	for {
 		str, err := rd.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			logging.Error("read rune: %v", err)
-			return cnt
-		}
 		for _, ch := range str {
 			cnt++
 			switch ch {
@@ -135,6 +128,13 @@ func getWords(r io.Reader, wds *words) int {
 				}
 			}
 			tmp += string(ch)
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logging.Error("read rune: %v", err)
+			return cnt
 		}
 	}
 	if len(tmp) > 0 {
