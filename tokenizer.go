@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,8 +21,8 @@ func New() *Tokenizer {
 }
 
 type vocab struct {
-	word string
-	next string
+	word word
+	next word
 }
 
 func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error) {
@@ -99,36 +98,28 @@ func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	}
 }
 
-func buildBlock(str string) string {
-	str = strings.TrimSpace(str)
-	tmp := make([]string, 0, len(str))
-	for _, ch := range str {
-		tmp = append(tmp, string(ch))
-	}
-	return strings.Join(tmp, " ")
-}
-
 func getWords(r io.Reader, wds *words) int {
 	rd := bufio.NewReader(r)
-	var tmp string
+	var tmp []rune
 	var cnt int
 	for {
 		str, err := rd.ReadString('\n')
 		for _, ch := range str {
 			cnt++
 			switch ch {
-			case ' ', ',', '.', '?', '!', '\n': // 英文分词
-				if len(tmp) > 0 {
-					wds.Put(buildBlock(tmp))
-					tmp = ""
+			case ' ', ',', '.', '?', '!', '\n', // 英文分词
+				'，', '。', '？', '！': // 中文分词
+				if len(tmp) == 0 {
+					continue
 				}
-			case '，', '。', '？', '！': // 中文分词
-				if len(tmp) > 0 {
-					wds.Put(buildBlock(tmp))
-					tmp = ""
-				}
+				wds.Put(buildBlock(string(tmp)))
+				tmp = tmp[:0]
 			}
-			tmp += string(ch)
+			tmp = append(tmp, ch)
+			if len(tmp) >= maxSeq {
+				wds.Put(buildBlock(string(tmp)))
+				tmp = tmp[:0]
+			}
 		}
 		if err != nil {
 			if err == io.EOF {
@@ -138,14 +129,15 @@ func getWords(r io.Reader, wds *words) int {
 			return cnt
 		}
 	}
-	if len(tmp) > 0 {
-		wds.Put(buildBlock(tmp))
+	str := strings.TrimSpace(string(tmp))
+	if len(str) > 0 {
+		wds.Put(buildBlock(str))
 	}
 	return cnt
 }
 
 type pair struct {
-	block string
+	block block
 	freq  int
 }
 
@@ -158,12 +150,14 @@ func parallel(wds *words, fn func(p pair)) {
 			fn(p)
 		}
 	}
-	wg.Add(runtime.NumCPU())
-	for i := 0; i < runtime.NumCPU(); i++ {
+	// n := runtime.NumCPU()
+	n := 1
+	wg.Add(n)
+	for i := 0; i < n; i++ {
 		go worker()
 	}
-	wds.Range(func(block string, freq int) {
-		ch <- pair{block, freq}
+	wds.Range(func(b block, freq int) {
+		ch <- pair{b, freq}
 	})
 	close(ch)
 	wg.Wait()
@@ -173,9 +167,11 @@ func getTokens(wds *words) map[string]int {
 	ret := make(map[string]int)
 	var m sync.Mutex
 	parallel(wds, func(p pair) {
-		for _, ch := range strings.Split(p.block, " ") {
+		n := p.block.Len()
+		for i := 0; i < n; i++ {
+			str := p.block.Get(i).String()
 			m.Lock()
-			ret[string(ch)] += p.freq
+			ret[str] += p.freq
 			m.Unlock()
 		}
 	})
@@ -186,10 +182,11 @@ func getStats(wds *words) map[vocab]int {
 	ret := make(map[vocab]int)
 	var m sync.Mutex
 	parallel(wds, func(p pair) {
-		tks := strings.Split(p.block, " ")
-		for i := 0; i < len(tks)-1; i++ {
+		n := p.block.Len()
+		for i := 0; i < n-1; i++ {
+			key := vocab{word: p.block.Get(i), next: p.block.Get(i + 1)}
 			m.Lock()
-			ret[vocab{word: string(tks[i]), next: tks[i+1]}] += p.freq
+			ret[key] += p.freq
 			m.Unlock()
 		}
 	})
@@ -207,18 +204,10 @@ func bestStat(stats map[vocab]int) vocab {
 }
 
 func mergeVocab(wds *words, best vocab) *words {
-	find := best.word + " " + best.next
-	replace := best.word + best.next
 	ret := newWords()
-
 	parallel(wds, func(p pair) {
 		block := p.block
-		for {
-			tmp := strings.ReplaceAll(block, find, replace)
-			if len(tmp) == len(block) {
-				break
-			}
-			block = tmp
+		for block.Merge(best.word, best.next) {
 		}
 		ret.Set(block, p.freq)
 	})
