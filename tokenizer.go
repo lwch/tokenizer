@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -150,8 +151,8 @@ func parallel(wds *words, fn func(p pair)) {
 			fn(p)
 		}
 	}
-	// n := runtime.NumCPU()
-	n := 1
+	n := runtime.NumCPU()
+	// n := 1
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go worker()
