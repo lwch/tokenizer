@@ -150,7 +150,41 @@ func getWords(r io.Reader, wds *words) int {
 		for _, ch := range str {
 			cnt++
 			switch ch {
-			case ' ', ',', '.', '?', '!', '<', '>', '[', ']', '{', '}', '(', ')', '+', '-', '*', '/', '=', '^', '&', '%', '$', '#', '`', '\\', '|', '"', '\'', '\r', '\n', // 英文分词
+			case '%': // 百分比
+				if len(tmp) == 0 {
+					wds.Put(buildBlock([]rune{ch}))
+					continue
+				}
+				isNumber := true
+				for _, ch := range tmp {
+					if (ch < '0' || ch > '9') && ch != '.' {
+						isNumber = false
+						break
+					}
+				}
+				if !isNumber {
+					wds.Put(buildBlock(tmp))
+					wds.Put(buildBlock([]rune{ch}))
+					tmp = tmp[:0]
+				}
+			case '.': // 小数
+				if len(tmp) == 0 {
+					wds.Put(buildBlock([]rune{ch}))
+					continue
+				}
+				isNumber := true
+				for _, ch := range tmp {
+					if ch < '0' || ch > '9' {
+						isNumber = false
+						break
+					}
+				}
+				if !isNumber {
+					wds.Put(buildBlock(tmp))
+					wds.Put(buildBlock([]rune{ch}))
+					tmp = tmp[:0]
+				}
+			case ' ', ',', '?', '!', '<', '>', '[', ']', '{', '}', '(', ')', '+', '-', '*', '/', '=', '^', '&', '$', '#', '`', '\\', '|', '"', '\'', '\r', '\n', // 英文分词
 				'，', '。', '？', '！', '《', '》', '【', '】', '「', '」', '『', '』', '…', '·', '“', '”', '‘', '’', '、': // 中文分词
 				if len(tmp) == 0 {
 					wds.Put(buildBlock([]rune{ch}))
