@@ -76,6 +76,8 @@ func getWords(r io.Reader, wds *words) {
 			if err == io.EOF {
 				break
 			}
+			logging.Error("read rune: %v", err)
+			return
 		}
 		switch ch {
 		case ' ', ',', '.', '?', '!', '\n': // 英文分词
