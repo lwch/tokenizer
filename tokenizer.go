@@ -112,7 +112,7 @@ func getWords(r io.Reader, wds *words) int {
 	var tmp string
 	var cnt int
 	for {
-		ch, _, err := rd.ReadRune()
+		str, err := rd.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -120,20 +120,22 @@ func getWords(r io.Reader, wds *words) int {
 			logging.Error("read rune: %v", err)
 			return cnt
 		}
-		cnt++
-		switch ch {
-		case ' ', ',', '.', '?', '!', '\n': // 英文分词
-			if len(tmp) > 0 {
-				wds.Put(buildBlock(tmp))
-				tmp = ""
+		for _, ch := range str {
+			cnt++
+			switch ch {
+			case ' ', ',', '.', '?', '!', '\n': // 英文分词
+				if len(tmp) > 0 {
+					wds.Put(buildBlock(tmp))
+					tmp = ""
+				}
+			case '，', '。', '？', '！': // 中文分词
+				if len(tmp) > 0 {
+					wds.Put(buildBlock(tmp))
+					tmp = ""
+				}
 			}
-		case '，', '。', '？', '！': // 中文分词
-			if len(tmp) > 0 {
-				wds.Put(buildBlock(tmp))
-				tmp = ""
-			}
+			tmp += string(ch)
 		}
-		tmp += string(ch)
 	}
 	if len(tmp) > 0 {
 		wds.Put(buildBlock(tmp))
