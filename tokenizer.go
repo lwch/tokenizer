@@ -32,7 +32,7 @@ func (t *Tokenizer) Train(reader []io.Reader, size int) map[string]int {
 		}(r)
 	}
 	wg.Wait()
-	logging.Debug("vocab size: %d", wds.Size())
+	logging.Info("vocab size: %d", wds.Size())
 	tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
 	logging.Info("got %d tokens/rune", len(tokens))
 	if len(tokens) >= size {
@@ -42,14 +42,14 @@ func (t *Tokenizer) Train(reader []io.Reader, size int) map[string]int {
 	for {
 		i++
 		stats := getStats(wds) // {{d,e}: 5, {e,p}: 5, ...}
-		logging.Debug("round %d, stats size: %d", i, len(stats))
+		logging.Info("round %d, stats size: %d", i, len(stats))
 		if len(stats) == 0 {
 			return tokens
 		}
 		best := bestStat(stats) // {d,e}
-		logging.Debug("round %d, found best stat: {%s, %s}", i, best.word, best.next)
+		logging.Info("round %d, found best stat: {%s, %s}", i, best.word, best.next)
 		wds = mergeVocab(wds, best) // {de e p: 5, l e a r n i n g: 3, ...}
-		logging.Debug("round %d, vocab size: %d", i, wds.Size())
+		logging.Info("round %d, vocab size: %d", i, wds.Size())
 		tokens = getTokens(wds) // {de: 5, e: 8, p: 5, ...}
 		logging.Info("round %d, got %d tokens", i, len(tokens))
 		if len(tokens) >= size {
