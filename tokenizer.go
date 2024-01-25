@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lwch/logging"
 )
@@ -60,11 +61,14 @@ func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
 	var wg sync.WaitGroup
 	wg.Add(len(readers))
+	var pending atomic.Int64
+	pending.Add(int64(len(readers)))
 	for i, r := range readers {
 		go func(i int, r io.Reader) {
 			defer wg.Done()
 			cnt := getWords(r, wds)
-			logging.Info("reader %d done, %d rune readen", i, cnt)
+			pending.Add(-1)
+			logging.Info("reader %d done, %d rune readen, %d readers pending", i, cnt, pending.Load())
 		}(i, r)
 	}
 	wg.Wait()
