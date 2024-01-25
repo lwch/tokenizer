@@ -9,7 +9,7 @@ const maxSeq = 32 // 单个token最大允许由32个字符组成
 
 type block [maxSeq * maxSeq]rune
 
-func buildBlock(str string) block {
+func buildBlock(str []rune) block {
 	var ret block
 	for i, ch := range str {
 		ret[i*maxSeq] = ch

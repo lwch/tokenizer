@@ -113,12 +113,12 @@ func getWords(r io.Reader, wds *words) int {
 				if len(tmp) == 0 {
 					continue
 				}
-				wds.Put(buildBlock(string(tmp)))
+				wds.Put(buildBlock(tmp))
 				tmp = tmp[:0]
 			}
 			tmp = append(tmp, ch)
 			if len(tmp) >= maxSeq {
-				wds.Put(buildBlock(string(tmp)))
+				wds.Put(buildBlock(tmp))
 				tmp = tmp[:0]
 			}
 		}
@@ -130,9 +130,8 @@ func getWords(r io.Reader, wds *words) int {
 			return cnt
 		}
 	}
-	str := strings.TrimSpace(string(tmp))
-	if len(str) > 0 {
-		wds.Put(buildBlock(str))
+	if len(tmp) > 0 {
+		wds.Put(buildBlock(tmp))
 	}
 	return cnt
 }
