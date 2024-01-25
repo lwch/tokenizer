@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-const maxSeq = 32 // 单个token最大允许由32个字符组成
+const maxSeq = 8 // 单个token最大允许由8个字符组成
 
 type block [maxSeq * maxSeq]rune
 
