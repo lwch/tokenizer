@@ -60,11 +60,12 @@ func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
 	var wg sync.WaitGroup
 	wg.Add(len(readers))
-	for _, r := range readers {
-		go func(r io.Reader) {
+	for i, r := range readers {
+		go func(i int, r io.Reader) {
 			defer wg.Done()
 			getWords(r, wds)
-		}(r)
+			logging.Info("reader %d done", i)
+		}(i, r)
 	}
 	wg.Wait()
 	logging.Info("vocab size: %d", wds.Size())
