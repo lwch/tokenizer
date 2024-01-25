@@ -145,7 +145,9 @@ func getWords(r io.Reader, wds *words) int {
 				wds.Put(buildBlock(tmp))
 				tmp = tmp[:0]
 			}
-			tmp = append(tmp, ch)
+			if ch != '\r' && ch != '\n' && ch != ' ' {
+				tmp = append(tmp, ch)
+			}
 			if len(tmp) >= maxSeq {
 				wds.Put(buildBlock(tmp))
 				tmp = tmp[:0]
