@@ -3,11 +3,14 @@ package tokenizer
 import (
 	"bufio"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/lwch/logging"
 )
+
+const readBlockSize = 1_000_000 // 1M
 
 type Tokenizer struct {
 }
@@ -21,11 +24,43 @@ type vocab struct {
 	next string
 }
 
-func (t *Tokenizer) Train(reader []io.Reader, size int) map[string]int {
+func (t *Tokenizer) TrainFiles(files []string, size int) (map[string]int, error) {
+	var readers []io.Reader
+	for _, file := range files {
+		fi, err := os.Stat(file)
+		if err != nil {
+			return nil, err
+		}
+		groups := fi.Size()/readBlockSize + 1
+		for i := int64(0); i < groups; i++ {
+			f, err := os.Open(file)
+			if err != nil {
+				return nil, err
+			}
+			defer f.Close()
+			if i*readBlockSize >= fi.Size() {
+				break
+			}
+			_, err = f.Seek(i*readBlockSize, io.SeekStart)
+			if err != nil {
+				return nil, err
+			}
+			readers = append(readers, io.LimitReader(f, readBlockSize))
+		}
+	}
+	return t.TrainReaders(readers, size), nil
+}
+
+func (t *Tokenizer) Train(str string, size int) map[string]int {
+	r := strings.NewReader(str)
+	return t.TrainReaders([]io.Reader{r}, size)
+}
+
+func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
 	var wg sync.WaitGroup
-	wg.Add(len(reader))
-	for _, r := range reader {
+	wg.Add(len(readers))
+	for _, r := range readers {
 		go func(r io.Reader) {
 			defer wg.Done()
 			getWords(r, wds)
