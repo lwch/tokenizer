@@ -50,6 +50,11 @@ func (r *limitReader) Close() error {
 
 func (t *Tokenizer) TrainFiles(files []string, size int) (<-chan map[string]int, error) {
 	var readers []io.ReadCloser
+	clear := func() {
+		for _, r := range readers {
+			r.Close()
+		}
+	}
 	for _, file := range files {
 		fi, err := os.Stat(file)
 		if err != nil {
@@ -59,14 +64,15 @@ func (t *Tokenizer) TrainFiles(files []string, size int) (<-chan map[string]int,
 		for i := int64(0); i < groups; i++ {
 			f, err := os.Open(file)
 			if err != nil {
+				clear()
 				return nil, err
 			}
-			defer f.Close()
 			if i*readBlockSize >= fi.Size() {
 				break
 			}
 			_, err = f.Seek(i*readBlockSize, io.SeekStart)
 			if err != nil {
+				clear()
 				return nil, err
 			}
 			readers = append(readers, newLimitReader(f, readBlockSize))
