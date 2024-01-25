@@ -70,7 +70,7 @@ func (t *Tokenizer) TrainReaders(readers []io.Reader, size int) map[string]int {
 	wg.Wait()
 	logging.Info("vocab size: %d", wds.Size())
 	tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
-	logging.Info("got %d tokens/rune", len(tokens))
+	logging.Info("got %d tokens of rune", len(tokens))
 	if len(tokens) >= size {
 		return tokens
 	}
