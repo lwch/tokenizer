@@ -167,6 +167,9 @@ func parallel(wds *words, fn func(i int, p pair)) {
 
 func getTokens(wds *words) map[string]int {
 	mps := make([]map[string]int, runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		mps[i] = make(map[string]int)
+	}
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for i := 0; i < n; i++ {
@@ -185,6 +188,9 @@ func getTokens(wds *words) map[string]int {
 
 func getStats(wds *words) map[vocab]int {
 	mps := make([]map[vocab]int, runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		mps[i] = make(map[vocab]int)
+	}
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for i := 0; i < n-1; i++ {
