@@ -153,9 +153,11 @@ func getWords(r io.Reader, wds *words) int {
 			case ' ', ',', '.', '?', '!', '<', '>', '[', ']', '{', '}', '(', ')', '+', '-', '*', '/', '=', '^', '&', '%', '$', '#', '`', '\\', '|', '"', '\'', '\r', '\n', // 英文分词
 				'，', '。', '？', '！', '《', '》', '【', '】', '「', '」', '『', '』', '…', '·', '“', '”', '‘', '’', '、': // 中文分词
 				if len(tmp) == 0 {
+					wds.Put(buildBlock([]rune{ch}))
 					continue
 				}
 				wds.Put(buildBlock(tmp))
+				wds.Put(buildBlock([]rune{ch}))
 				tmp = tmp[:0]
 			default:
 				tmp = append(tmp, ch)
