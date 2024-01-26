@@ -2,7 +2,6 @@ package tokenizer
 
 import (
 	"strings"
-	"sync"
 )
 
 const maxSeq = 8 // 单个token最大允许由8个字符组成
@@ -66,35 +65,24 @@ func (b block) String() string {
 	return strings.Join(tmp, " ")
 }
 
-type words struct {
-	sync.RWMutex
-	data map[block]int
+type words map[block]int
+
+func newWords(arr []map[block]int) words {
+	wds := make(words)
+	for _, mp := range arr {
+		for k, v := range mp {
+			wds[k] += v
+		}
+	}
+	return wds
 }
 
-func newWords() *words {
-	return &words{data: make(map[block]int)}
+func (wds words) Size() int {
+	return len(wds)
 }
 
-func (w *words) Size() int {
-	return len(w.data)
-}
-
-func (w *words) Put(b block) {
-	w.Lock()
-	defer w.Unlock()
-	w.data[b]++
-}
-
-func (w *words) Set(b block, freq int) {
-	w.Lock()
-	defer w.Unlock()
-	w.data[b] = freq
-}
-
-func (w *words) Range(fn func(block, int)) {
-	w.RLock()
-	defer w.RUnlock()
-	for k, v := range w.data {
+func (wds words) Range(fn func(block, int)) {
+	for k, v := range wds {
 		fn(k, v)
 	}
 }

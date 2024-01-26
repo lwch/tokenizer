@@ -91,23 +91,28 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 	ch := make(chan map[string]int, 1)
 	go func() {
 		defer close(ch)
-		wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
+
 		var wg sync.WaitGroup
 		wg.Add(len(readers))
+
 		var readen atomic.Uint64
 		var pending atomic.Int64
 		pending.Add(int64(len(readers)))
+		mps := make([]map[block]int, len(readers))
 		for i, r := range readers {
 			go func(i int, r io.ReadCloser) {
 				defer wg.Done()
 				defer r.Close()
-				cnt := getWords(r, wds)
+				var cnt int
+				mps[i], cnt = getWords(r)
 				readen.Add(uint64(cnt))
 				pending.Add(-1)
 				logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
 			}(i, r)
 		}
 		wg.Wait()
+
+		wds := newWords(mps) // {d e e p: 5, l e a r n i n g: 3, ...}
 		logging.Info("vocab size: %d", wds.Size())
 		tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
 		logging.Info("got %d tokens of rune", len(tokens))
@@ -146,7 +151,8 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 	return ch
 }
 
-func getWords(r io.Reader, wds *words) int {
+func getWords(r io.Reader) (map[block]int, int) {
+	ret := make(map[block]int)
 	rd := bufio.NewReader(r)
 	var tmp []rune
 	var cnt int
@@ -157,7 +163,7 @@ func getWords(r io.Reader, wds *words) int {
 			switch {
 			case ch == '%': // 百分比
 				if len(tmp) == 0 {
-					wds.Put(buildBlock([]rune{ch}))
+					ret[buildBlock([]rune{ch})]++
 					continue
 				}
 				isNumber := true
@@ -168,13 +174,13 @@ func getWords(r io.Reader, wds *words) int {
 					}
 				}
 				if !isNumber {
-					wds.Put(buildBlock(tmp))
-					wds.Put(buildBlock([]rune{ch}))
+					ret[buildBlock(tmp)]++
+					ret[buildBlock([]rune{ch})]++
 					tmp = tmp[:0]
 				}
 			case ch == '.': // 小数
 				if len(tmp) == 0 {
-					wds.Put(buildBlock([]rune{ch}))
+					ret[buildBlock([]rune{ch})]++
 					continue
 				}
 				isNumber := true
@@ -185,23 +191,23 @@ func getWords(r io.Reader, wds *words) int {
 					}
 				}
 				if !isNumber {
-					wds.Put(buildBlock(tmp))
-					wds.Put(buildBlock([]rune{ch}))
+					ret[buildBlock(tmp)]++
+					ret[buildBlock([]rune{ch})]++
 					tmp = tmp[:0]
 				}
 			case unicode.IsPunct(ch) || unicode.IsSpace(ch):
 				if len(tmp) == 0 {
-					wds.Put(buildBlock([]rune{ch}))
+					ret[buildBlock([]rune{ch})]++
 					continue
 				}
-				wds.Put(buildBlock(tmp))
-				wds.Put(buildBlock([]rune{ch}))
+				ret[buildBlock(tmp)]++
+				ret[buildBlock([]rune{ch})]++
 				tmp = tmp[:0]
 			default:
 				tmp = append(tmp, ch)
 			}
 			if len(tmp) >= maxSeq {
-				wds.Put(buildBlock(tmp))
+				ret[buildBlock(tmp)]++
 				tmp = tmp[:0]
 			}
 		}
@@ -210,13 +216,13 @@ func getWords(r io.Reader, wds *words) int {
 				break
 			}
 			logging.Error("read rune: %v", err)
-			return cnt
+			return ret, cnt
 		}
 	}
 	if len(tmp) > 0 {
-		wds.Put(buildBlock(tmp))
+		ret[buildBlock(tmp)]++
 	}
-	return cnt
+	return ret, cnt
 }
 
 type pair struct {
@@ -224,7 +230,7 @@ type pair struct {
 	freq  int
 }
 
-func parallel(wds *words, fn func(i int, p pair)) {
+func parallel(wds words, fn func(i int, p pair)) {
 	var wg sync.WaitGroup
 	ch := make(chan pair, 1000)
 	worker := func(i int) {
@@ -234,7 +240,7 @@ func parallel(wds *words, fn func(i int, p pair)) {
 		}
 	}
 	n := runtime.NumCPU()
-	// n := 1
+	// n = 1
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go worker(i)
@@ -246,7 +252,7 @@ func parallel(wds *words, fn func(i int, p pair)) {
 	wg.Wait()
 }
 
-func getTokens(wds *words) map[string]int {
+func getTokens(wds words) map[string]int {
 	mps := make([]map[string]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[string]int)
@@ -267,7 +273,7 @@ func getTokens(wds *words) map[string]int {
 	return ret
 }
 
-func getStats(wds *words) map[vocab]int {
+func getStats(wds words) map[vocab]int {
 	mps := make([]map[vocab]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[vocab]int)
@@ -321,9 +327,12 @@ func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 	return ret
 }
 
-func mergeVocab(wds *words, bests []vocab) *words {
-	ret := newWords()
-	parallel(wds, func(_ int, p pair) {
+func mergeVocab(wds words, bests []vocab) words {
+	mps := make([]map[block]int, runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		mps[i] = make(map[block]int)
+	}
+	parallel(wds, func(i int, p pair) {
 		block := p.block
 		for {
 			changed := false
@@ -338,7 +347,7 @@ func mergeVocab(wds *words, bests []vocab) *words {
 				break
 			}
 		}
-		ret.Set(block, p.freq)
+		mps[i][block] = p.freq
 	})
-	return ret
+	return newWords(mps)
 }
