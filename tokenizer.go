@@ -251,6 +251,41 @@ func parallel(wds words, fn func(i int, p pair)) {
 	wg.Wait()
 }
 
+func parallelMerge[Key vocab | string](arr []map[Key]int, total int) map[Key]int {
+	type pair struct {
+		key Key
+		val int
+	}
+	ret := make(map[Key]int, total)
+	var wg sync.WaitGroup
+	var m sync.Mutex
+	worker := func(ch chan pair) {
+		for p := range ch {
+			m.Lock()
+			ret[p.key] += p.val
+			m.Unlock()
+		}
+	}
+	ch := make(chan pair, 1000)
+	n := runtime.NumCPU()
+	// n = 1
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			worker(ch)
+		}()
+	}
+	for _, mp := range arr {
+		for k, v := range mp {
+			ch <- pair{k, v}
+		}
+	}
+	close(ch)
+	wg.Wait()
+	return ret
+}
+
 func getTokens(wds words) map[string]int {
 	mps := make([]map[string]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
@@ -265,14 +300,7 @@ func getTokens(wds words) map[string]int {
 		}
 		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
-
-	ret := make(map[string]int, total)
-	for _, mp := range mps {
-		for k, v := range mp {
-			ret[k] += v
-		}
-	}
-	return ret
+	return parallelMerge(mps, total)
 }
 
 func getStats(wds words) map[vocab]int {
@@ -295,13 +323,7 @@ func getStats(wds words) map[vocab]int {
 		}
 		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
-	ret := make(map[vocab]int, total)
-	for _, mp := range mps {
-		for k, v := range mp {
-			ret[k] += v
-		}
-	}
-	return ret
+	return parallelMerge(mps, total)
 }
 
 func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
