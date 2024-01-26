@@ -79,15 +79,15 @@ func (t *Tokenizer) TrainFiles(files []string, minFreq, size int, ratio float64)
 			readers = append(readers, newLimitReader(f, readBlockSize))
 		}
 	}
-	return t.TrainReaders(readers, minFreq, size, ratio), nil
+	return t.TrainReaders(readers, minFreq, size), nil
 }
 
-func (t *Tokenizer) Train(str string, minFreq, size int, ratio float64) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, minFreq, size int) <-chan map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, minFreq, size, ratio)
+	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, minFreq, size)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int, ratio float64) <-chan map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-chan map[string]int {
 	ch := make(chan map[string]int)
 	go func() {
 		defer close(ch)
@@ -128,14 +128,6 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int, rat
 			if len(bests) == 0 {
 				return
 			}
-			top := int(float64(expect) * ratio)
-			if top == 0 {
-				top = len(bests)
-			}
-			if top > len(bests) {
-				top = len(bests)
-			}
-			bests = bests[:top]
 			var logs []string
 			for _, best := range bests {
 				logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
@@ -309,16 +301,16 @@ func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 		return arr[i].freq > arr[j].freq
 	})
 	var ret []vocab
-	// prefix := make(map[word]struct{})
+	prefix := make(map[word]struct{})
 	for i := 0; i < size; i++ {
 		if arr[i].freq < minFreq {
 			return ret
 		}
-		// if _, ok := prefix[arr[i].voc.word]; ok {
-		// 	return ret
-		// }
+		if _, ok := prefix[arr[i].voc.word]; ok {
+			return ret
+		}
 		ret = append(ret, arr[i].voc)
-		// prefix[arr[i].voc.word] = struct{}{}
+		prefix[arr[i].voc.word] = struct{}{}
 	}
 	return ret
 }
