@@ -322,7 +322,8 @@ func mergeVocab(wds *words, bests []vocab) *words {
 		for {
 			changed := false
 			for _, best := range bests {
-				for block.Merge(best.word, best.next) {
+				var idx int
+				for ; idx != -1; idx = block.Merge(best.word, best.next, idx) {
 					changed = true
 				}
 			}

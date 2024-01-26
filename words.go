@@ -39,15 +39,15 @@ func (b block) Get(n int) word {
 	return wd
 }
 
-func (b *block) Merge(word, next word) bool {
+func (b *block) Merge(word, next word, idx int) int {
 	n := b.Len()
-	for i := 0; i < n-1; i++ {
+	for i := idx; i < n-1; i++ {
 		if b.Get(i).Equal(word) && b.Get(i+1).HasPrefix(next) {
 			b.merge(i, next.Len())
-			return true
+			return i + 1
 		}
 	}
-	return false
+	return -1
 }
 
 func (b *block) merge(i, size int) {
