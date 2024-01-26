@@ -88,7 +88,7 @@ func (t *Tokenizer) Train(str string, minFreq, size int) <-chan map[string]int {
 }
 
 func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-chan map[string]int {
-	ch := make(chan map[string]int)
+	ch := make(chan map[string]int, 1)
 	go func() {
 		defer close(ch)
 		wds := newWords() // {d e e p: 5, l e a r n i n g: 3, ...}
@@ -226,7 +226,7 @@ type pair struct {
 
 func parallel(wds *words, fn func(i int, p pair)) {
 	var wg sync.WaitGroup
-	ch := make(chan pair)
+	ch := make(chan pair, 1000)
 	worker := func(i int) {
 		defer wg.Done()
 		for p := range ch {
