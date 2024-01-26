@@ -300,16 +300,16 @@ func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 		return arr[i].freq > arr[j].freq
 	})
 	var ret []vocab
-	prefix := make(map[word]struct{})
+	// prefix := make(map[word]struct{})
 	for i := 0; i < size; i++ {
 		if arr[i].freq < minFreq {
 			return ret
 		}
-		if _, ok := prefix[arr[i].voc.word]; ok {
-			return ret
-		}
+		// if _, ok := prefix[arr[i].voc.word]; ok {
+		// 	return ret
+		// }
 		ret = append(ret, arr[i].voc)
-		prefix[arr[i].voc.word] = struct{}{}
+		// prefix[arr[i].voc.word] = struct{}{}
 	}
 	return ret
 }
