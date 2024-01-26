@@ -111,8 +111,8 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 			}(i, r)
 		}
 		wg.Wait()
-
 		logging.Info("vocab size: %d", wds.Size())
+
 		tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
 		logging.Info("got %d tokens of rune", len(tokens))
 		ch <- tokens
@@ -263,12 +263,22 @@ func getTokens(wds words) map[string]int {
 			mps[i][str] += p.freq
 		}
 	})
+
+	var wg sync.WaitGroup
+	var m sync.Mutex
 	ret := make(map[string]int)
 	for _, mp := range mps {
 		for k, v := range mp {
-			ret[k] += v
+			wg.Add(1)
+			go func(k string, v int) {
+				defer wg.Done()
+				m.Lock()
+				ret[k] += v
+				m.Unlock()
+			}(k, v)
 		}
 	}
+	wg.Wait()
 	return ret
 }
 
@@ -290,12 +300,21 @@ func getStats(wds words) map[vocab]int {
 			word = next
 		}
 	})
+	var wg sync.WaitGroup
+	var m sync.Mutex
 	ret := make(map[vocab]int)
 	for _, mp := range mps {
 		for k, v := range mp {
-			ret[k] += v
+			wg.Add(1)
+			go func(k vocab, v int) {
+				defer wg.Done()
+				m.Lock()
+				ret[k] += v
+				m.Unlock()
+			}(k, v)
 		}
 	}
+	wg.Wait()
 	return ret
 }
 
