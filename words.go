@@ -29,21 +29,19 @@ func (b block) Len() int {
 	return ret
 }
 
-func (b block) Get(n int) word {
-	var wd word
+func (b block) Get(n int) string {
 	var idx int
 	for i := 0; i < n; i++ {
 		idx += int(b.length[i])
 	}
-	copy(wd[:b.length[n]], b.tokens[idx:idx+int(b.length[n])])
-	return wd
+	return string(b.tokens[idx : idx+int(b.length[n])])
 }
 
-func (b *block) Merge(word, next word, idx int) int {
+func (b *block) Merge(word, next string, idx int) int {
 	n := b.Len()
 	for i := idx; i < n-1; i++ {
-		if b.Get(i).Equal(word) && b.Get(i+1).HasPrefix(next) {
-			b.merge(i, next.Len())
+		if b.Get(i) == word && strings.HasPrefix(b.Get(i+1), next) {
+			b.merge(i, len([]rune(next)))
 			return i + 1
 		}
 	}
@@ -66,59 +64,9 @@ func (b block) String() string {
 	n := b.Len()
 	var tmp []string
 	for i := 0; i < n; i++ {
-		tmp = append(tmp, b.Get(i).String())
+		tmp = append(tmp, b.Get(i))
 	}
 	return strings.Join(tmp, " ")
-}
-
-type word [maxSeq]rune
-
-func (wd word) Len() int {
-	for i := 0; i < maxSeq; i++ {
-		if wd[i] == 0 {
-			return i
-		}
-	}
-	return maxSeq
-}
-
-func (wd word) Equal(a word) bool {
-	n1 := wd.Len()
-	n2 := a.Len()
-	if n1 != n2 {
-		return false
-	}
-	for i := 0; i < n1; i++ {
-		if wd[i] != a[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func (wd word) HasPrefix(prefix word) bool {
-	n1 := wd.Len()
-	n2 := prefix.Len()
-	if n1 < n2 {
-		return false
-	}
-	for i := 0; i < n2; i++ {
-		if wd[i] != prefix[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func (wd word) String() string {
-	var str string
-	for i := 0; i < maxSeq; i++ {
-		if wd[i] == 0 {
-			return str
-		}
-		str += string(wd[i])
-	}
-	return str
 }
 
 type words struct {

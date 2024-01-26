@@ -25,8 +25,8 @@ func New() *Tokenizer {
 }
 
 type vocab struct {
-	word word
-	next word
+	word string
+	next string
 }
 
 type limitReader struct {
@@ -254,7 +254,7 @@ func getTokens(wds *words) map[string]int {
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for j := 0; j < n; j++ {
-			str := p.block.Get(j).String()
+			str := p.block.Get(j)
 			mps[i][str] += p.freq
 		}
 	})
@@ -301,7 +301,7 @@ func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 		return arr[i].freq > arr[j].freq
 	})
 	var ret []vocab
-	prefix := make(map[word]struct{})
+	prefix := make(map[string]struct{})
 	for i := 0; i < size; i++ {
 		if arr[i].freq < minFreq {
 			return ret
