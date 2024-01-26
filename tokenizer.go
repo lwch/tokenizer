@@ -49,7 +49,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, minFreq, size int) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, minFreq, size int, ratio float64) (<-chan map[string]int, error) {
 	var readers []io.ReadCloser
 	clear := func() {
 		for _, r := range readers {
@@ -79,15 +79,15 @@ func (t *Tokenizer) TrainFiles(files []string, minFreq, size int) (<-chan map[st
 			readers = append(readers, newLimitReader(f, readBlockSize))
 		}
 	}
-	return t.TrainReaders(readers, minFreq, size), nil
+	return t.TrainReaders(readers, minFreq, size, ratio), nil
 }
 
-func (t *Tokenizer) Train(str string, minFreq, size int) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, minFreq, size int, ratio float64) <-chan map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, minFreq, size)
+	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, minFreq, size, ratio)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-chan map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int, ratio float64) <-chan map[string]int {
 	ch := make(chan map[string]int)
 	go func() {
 		defer close(ch)
@@ -123,10 +123,19 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 			if len(stats) == 0 {
 				return
 			}
-			bests := bestStats(stats, minFreq, size-len(tokens)) // {d,e}, ...
+			expect := size - len(tokens)
+			bests := bestStats(stats, minFreq, expect) // {d,e}, ...
 			if len(bests) == 0 {
 				return
 			}
+			top := int(float64(expect) * ratio)
+			if top == 0 {
+				top = len(bests)
+			}
+			if top > len(bests) {
+				top = len(bests)
+			}
+			bests = bests[:top]
 			var logs []string
 			for _, best := range bests {
 				logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
