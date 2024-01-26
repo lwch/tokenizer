@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/lwch/logging"
 )
@@ -48,7 +49,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, size int) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, minFreq, size int) (<-chan map[string]int, error) {
 	var readers []io.ReadCloser
 	clear := func() {
 		for _, r := range readers {
@@ -78,15 +79,15 @@ func (t *Tokenizer) TrainFiles(files []string, size int) (<-chan map[string]int,
 			readers = append(readers, newLimitReader(f, readBlockSize))
 		}
 	}
-	return t.TrainReaders(readers, size), nil
+	return t.TrainReaders(readers, minFreq, size), nil
 }
 
-func (t *Tokenizer) Train(str string, size int) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, minFreq, size int) <-chan map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, size)
+	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, minFreq, size)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int) <-chan map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-chan map[string]int {
 	ch := make(chan map[string]int)
 	go func() {
 		defer close(ch)
@@ -122,7 +123,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int) <-chan map[s
 			if len(stats) == 0 {
 				return
 			}
-			bests := bestStats(stats, size-len(tokens)) // {d,e}, ...
+			bests := bestStats(stats, minFreq, size-len(tokens)) // {d,e}, ...
 			var logs []string
 			for _, best := range bests {
 				logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
@@ -149,8 +150,8 @@ func getWords(r io.Reader, wds *words) int {
 		str, err := rd.ReadString('\n')
 		for _, ch := range str {
 			cnt++
-			switch ch {
-			case '%': // 百分比
+			switch {
+			case ch == '%': // 百分比
 				if len(tmp) == 0 {
 					wds.Put(buildBlock([]rune{ch}))
 					continue
@@ -167,7 +168,7 @@ func getWords(r io.Reader, wds *words) int {
 					wds.Put(buildBlock([]rune{ch}))
 					tmp = tmp[:0]
 				}
-			case '.': // 小数
+			case ch == '.': // 小数
 				if len(tmp) == 0 {
 					wds.Put(buildBlock([]rune{ch}))
 					continue
@@ -184,8 +185,7 @@ func getWords(r io.Reader, wds *words) int {
 					wds.Put(buildBlock([]rune{ch}))
 					tmp = tmp[:0]
 				}
-			case ' ', ',', '?', '!', '<', '>', '[', ']', '{', '}', '(', ')', '+', '-', '*', '/', '=', '^', '&', '$', '#', '`', '\\', '|', '"', '\'', '\r', '\n', // 英文分词
-				'，', '。', '？', '！', '《', '》', '【', '】', '「', '」', '『', '』', '…', '·', '“', '”', '‘', '’', '、': // 中文分词
+			case unicode.IsSymbol(ch):
 				if len(tmp) == 0 {
 					wds.Put(buildBlock([]rune{ch}))
 					continue
@@ -284,7 +284,7 @@ func getStats(wds *words) map[vocab]int {
 	return ret
 }
 
-func bestStats(stats map[vocab]int, size int) []vocab {
+func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 	type pair struct {
 		voc  vocab
 		freq int
@@ -299,6 +299,9 @@ func bestStats(stats map[vocab]int, size int) []vocab {
 	var ret []vocab
 	prefix := make(map[word]struct{})
 	for i := 0; i < size; i++ {
+		if arr[i].freq < minFreq {
+			return ret
+		}
 		if _, ok := prefix[arr[i].voc.word]; ok {
 			return ret
 		}
