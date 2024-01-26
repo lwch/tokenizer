@@ -256,29 +256,22 @@ func getTokens(wds words) map[string]int {
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[string]int)
 	}
+	var total int
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for j := 0; j < n; j++ {
 			str := p.block.Get(j)
 			mps[i][str] += p.freq
 		}
+		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
 
-	var wg sync.WaitGroup
-	var m sync.Mutex
-	ret := make(map[string]int)
+	ret := make(map[string]int, total)
 	for _, mp := range mps {
 		for k, v := range mp {
-			wg.Add(1)
-			go func(k string, v int) {
-				defer wg.Done()
-				m.Lock()
-				ret[k] += v
-				m.Unlock()
-			}(k, v)
+			ret[k] += v
 		}
 	}
-	wg.Wait()
 	return ret
 }
 
@@ -287,6 +280,7 @@ func getStats(wds words) map[vocab]int {
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[vocab]int)
 	}
+	var total int
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		var word string
@@ -299,22 +293,14 @@ func getStats(wds words) map[vocab]int {
 			mps[i][key] += p.freq
 			word = next
 		}
+		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
-	var wg sync.WaitGroup
-	var m sync.Mutex
-	ret := make(map[vocab]int)
+	ret := make(map[vocab]int, total)
 	for _, mp := range mps {
 		for k, v := range mp {
-			wg.Add(1)
-			go func(k vocab, v int) {
-				defer wg.Done()
-				m.Lock()
-				ret[k] += v
-				m.Unlock()
-			}(k, v)
+			ret[k] += v
 		}
 	}
-	wg.Wait()
 	return ret
 }
 
@@ -352,17 +338,10 @@ func mergeVocab(wds words, bests []vocab) words {
 	}
 	parallel(wds, func(i int, p pair) {
 		block := p.block
-		for {
-			changed := false
-			for _, best := range bests {
-				idx := block.Merge(best.word, best.next, 0)
-				for idx != -1 {
-					changed = true
-					idx = block.Merge(best.word, best.next, idx)
-				}
-			}
-			if !changed {
-				break
+		for _, best := range bests {
+			idx := block.Merge(best.word, best.next, 0)
+			for idx != -1 {
+				idx = block.Merge(best.word, best.next, idx)
 			}
 		}
 		mps[i][block] = p.freq
