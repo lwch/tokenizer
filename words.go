@@ -65,24 +65,20 @@ func (b block) String() string {
 	return strings.Join(tmp, " ")
 }
 
-type words map[block]int
-
-func newWords(arr []map[block]int) words {
-	wds := make(words)
-	for _, mp := range arr {
-		for k, v := range mp {
-			wds[k] += v
-		}
-	}
-	return wds
-}
+type words []map[block]int
 
 func (wds words) Size() int {
-	return len(wds)
+	var ret int
+	for _, wd := range wds {
+		ret += len(wd)
+	}
+	return ret
 }
 
 func (wds words) Range(fn func(block, int)) {
-	for k, v := range wds {
-		fn(k, v)
+	for _, wd := range wds {
+		for k, v := range wd {
+			fn(k, v)
+		}
 	}
 }

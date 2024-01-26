@@ -98,13 +98,13 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 		var readen atomic.Uint64
 		var pending atomic.Int64
 		pending.Add(int64(len(readers)))
-		mps := make([]map[block]int, len(readers))
+		wds := make(words, len(readers)) // {d e e p: 5, l e a r n i n g: 3, ...}
 		for i, r := range readers {
 			go func(i int, r io.ReadCloser) {
 				defer wg.Done()
 				defer r.Close()
 				var cnt int
-				mps[i], cnt = getWords(r)
+				wds[i], cnt = getWords(r)
 				readen.Add(uint64(cnt))
 				pending.Add(-1)
 				logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
@@ -112,7 +112,6 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 		}
 		wg.Wait()
 
-		wds := newWords(mps) // {d e e p: 5, l e a r n i n g: 3, ...}
 		logging.Info("vocab size: %d", wds.Size())
 		tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
 		logging.Info("got %d tokens of rune", len(tokens))
@@ -328,7 +327,7 @@ func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 }
 
 func mergeVocab(wds words, bests []vocab) words {
-	mps := make([]map[block]int, runtime.NumCPU())
+	mps := make(words, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[block]int)
 	}
@@ -349,5 +348,5 @@ func mergeVocab(wds words, bests []vocab) words {
 		}
 		mps[i][block] = p.freq
 	})
-	return newWords(mps)
+	return mps
 }
