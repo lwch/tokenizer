@@ -268,23 +268,27 @@ func getTokens(wds *words) map[string]int {
 }
 
 func getStats(wds *words) map[vocab]int {
-	mps := make([]map[vocab]int, runtime.NumCPU())
-	for i := 0; i < runtime.NumCPU(); i++ {
-		mps[i] = make(map[vocab]int)
-	}
+	// mps := make([]map[vocab]int, runtime.NumCPU())
+	// for i := 0; i < runtime.NumCPU(); i++ {
+	// 	mps[i] = make(map[vocab]int)
+	// }
+	ret := make(map[vocab]int)
+	var m sync.Mutex
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
 		for j := 0; j < n-1; j++ {
 			key := vocab{word: p.block.Get(j), next: p.block.Get(j + 1)}
-			mps[i][key] += p.freq
+			// mps[i][key] += p.freq
+			m.Lock()
+			ret[key] += p.freq
+			m.Unlock()
 		}
 	})
-	ret := make(map[vocab]int)
-	for _, mp := range mps {
-		for k, v := range mp {
-			ret[k] += v
-		}
-	}
+	// for _, mp := range mps {
+	// 	for k, v := range mp {
+	// 		ret[k] += v
+	// 	}
+	// }
 	return ret
 }
 
