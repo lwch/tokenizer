@@ -124,6 +124,9 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 				return
 			}
 			bests := bestStats(stats, minFreq, size-len(tokens)) // {d,e}, ...
+			if len(bests) == 0 {
+				return
+			}
 			var logs []string
 			for _, best := range bests {
 				logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
