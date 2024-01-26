@@ -7,35 +7,35 @@ import (
 
 const maxSeq = 8 // 单个token最大允许由8个字符组成
 
-type block [maxSeq * maxSeq]rune
+type block struct {
+	length [maxSeq]uint8
+	tokens [maxSeq]rune
+}
 
 func buildBlock(str []rune) block {
 	var ret block
 	for i, ch := range str {
-		ret[i*maxSeq] = ch
+		ret.length[i] = 1
+		ret.tokens[i] = ch
 	}
 	return ret
 }
 
 func (b block) Len() int {
+	var ret int
 	for i := 0; i < maxSeq; i++ {
-		if b[i*maxSeq] == 0 {
-			return i
-		}
+		ret += int(b.length[i])
 	}
-	return maxSeq
+	return ret
 }
 
 func (b block) Get(n int) word {
 	var wd word
-	idx := n * maxSeq
-	for i := 0; i < maxSeq; i++ {
-		if b[idx] == 0 {
-			return wd
-		}
-		wd[i] = b[idx]
-		idx++
+	var idx int
+	for i := 0; i < n; i++ {
+		idx += int(b.length[i])
 	}
+	copy(wd[:b.length[n]], b.tokens[idx:idx+int(b.length[n])])
 	return wd
 }
 
@@ -51,28 +51,15 @@ func (b *block) Merge(word, next word, idx int) int {
 }
 
 func (b *block) merge(i, size int) {
-	curr := b[i*maxSeq : (i+1)*maxSeq]
-	next := b[(i+1)*maxSeq : (i+2)*maxSeq]
-	for i := 0; i < maxSeq; i++ {
-		if curr[i] == 0 {
-			copy(curr[i:i+size], next[:size])
-			break
-		}
+	b.length[i] += uint8(size)
+	b.length[i+1] -= uint8(size)
+	if b.length[i+1] > 0 {
+		return
 	}
-	var wd word
-	for j := size; j < maxSeq; j++ {
-		wd[j-size] = next[j]
+	for j := i + 1; j < maxSeq-1; j++ {
+		b.length[j] = b.length[j+1]
 	}
-	copy(next, wd[:])
-	if next[0] == 0 {
-		idx := (i + 1) * maxSeq
-		copy(b[idx:(maxSeq-1)*maxSeq], b[idx+maxSeq:])
-		idx = (maxSeq - 1) * maxSeq
-		for j := 0; j < maxSeq; j++ {
-			b[idx] = 0
-			idx++
-		}
-	}
+	b.length[maxSeq-1] = 0
 }
 
 func (b block) String() string {
