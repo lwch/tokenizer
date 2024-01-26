@@ -22,11 +22,12 @@ func buildBlock(str []rune) block {
 }
 
 func (b block) Len() int {
-	var ret int
 	for i := 0; i < maxSeq; i++ {
-		ret += int(b.length[i])
+		if b.length[i] == 0 {
+			return i
+		}
 	}
-	return ret
+	return maxSeq
 }
 
 func (b block) Get(n int) string {
@@ -41,15 +42,15 @@ func (b *block) Merge(word, next string, idx int) int {
 	n := b.Len()
 	for i := idx; i < n-1; i++ {
 		if b.Get(i) == word && b.Get(i+1) == next {
-			b.merge(i, len([]rune(next)))
+			b.merge(i)
 			return i + 1
 		}
 	}
 	return -1
 }
 
-func (b *block) merge(i, size int) {
-	b.length[i] += uint8(size)
+func (b *block) merge(i int) {
+	b.length[i] += b.length[i+1]
 	for j := i + 1; j < maxSeq-1; j++ {
 		b.length[j] = b.length[j+1]
 	}

@@ -274,9 +274,15 @@ func getStats(wds *words) map[vocab]int {
 	}
 	parallel(wds, func(i int, p pair) {
 		n := p.block.Len()
+		var word string
+		if n > 0 {
+			word = p.block.Get(0)
+		}
 		for j := 0; j < n-1; j++ {
-			key := vocab{word: p.block.Get(j), next: p.block.Get(j + 1)}
+			next := p.block.Get(j + 1)
+			key := vocab{word: word, next: next}
 			mps[i][key] += p.freq
+			word = next
 		}
 	})
 	ret := make(map[vocab]int)
