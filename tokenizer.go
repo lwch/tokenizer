@@ -188,7 +188,7 @@ func getWords(r io.Reader, wds *words) int {
 					wds.Put(buildBlock([]rune{ch}))
 					tmp = tmp[:0]
 				}
-			case unicode.IsSymbol(ch):
+			case unicode.IsSymbol(ch) || unicode.IsSpace(ch):
 				if len(tmp) == 0 {
 					wds.Put(buildBlock([]rune{ch}))
 					continue
