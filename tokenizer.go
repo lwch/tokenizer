@@ -18,10 +18,19 @@ import (
 const readBlockSize = 100_000_000 // 1M
 
 type Tokenizer struct {
+	specialTokens map[rune]bool
 }
 
 func New() *Tokenizer {
-	return &Tokenizer{}
+	return &Tokenizer{
+		specialTokens: make(map[rune]bool),
+	}
+}
+
+func (t *Tokenizer) AddSpecialTokens(token ...rune) {
+	for _, v := range token {
+		t.specialTokens[v] = true
+	}
 }
 
 type vocab struct {
@@ -104,7 +113,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 				defer wg.Done()
 				defer r.Close()
 				var cnt int
-				wds[i], cnt = getWords(r)
+				wds[i], cnt = getWords(r, t.specialTokens)
 				readen.Add(uint64(cnt))
 				pending.Add(-1)
 				logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
@@ -150,7 +159,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 	return ch
 }
 
-func getWords(r io.Reader) (map[block]int, int) {
+func getWords(r io.Reader, specialTokens map[rune]bool) (map[block]int, int) {
 	ret := make(map[block]int)
 	rd := bufio.NewReader(r)
 	var tmp []rune
@@ -194,7 +203,7 @@ func getWords(r io.Reader) (map[block]int, int) {
 					ret[buildBlock([]rune{ch})]++
 					tmp = tmp[:0]
 				}
-			case unicode.IsPunct(ch) || unicode.IsSpace(ch):
+			case unicode.IsPunct(ch) || unicode.IsSpace(ch) || specialTokens[ch]:
 				if len(tmp) == 0 {
 					ret[buildBlock([]rune{ch})]++
 					continue
