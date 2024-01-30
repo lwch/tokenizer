@@ -58,7 +58,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, minFreq, size int, ratio float64) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, minFreq, size int) (<-chan map[string]int, error) {
 	var readers []io.ReadCloser
 	clear := func() {
 		for _, r := range readers {
