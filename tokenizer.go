@@ -21,6 +21,8 @@ type Tokenizer struct {
 	specialTokens map[rune]bool
 }
 
+type FilterFunc func(string, int) bool
+
 func New() *Tokenizer {
 	return &Tokenizer{
 		specialTokens: make(map[rune]bool),
@@ -58,7 +60,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, minFreq, size int) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[string]int, error) {
 	var readers []io.ReadCloser
 	clear := func() {
 		for _, r := range readers {
@@ -88,15 +90,15 @@ func (t *Tokenizer) TrainFiles(files []string, minFreq, size int) (<-chan map[st
 			readers = append(readers, newLimitReader(f, readBlockSize))
 		}
 	}
-	return t.TrainReaders(readers, minFreq, size), nil
+	return t.TrainReaders(readers, size, filter), nil
 }
 
-func (t *Tokenizer) Train(str string, minFreq, size int) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, minFreq, size)
+	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, size, filter)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-chan map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(string, int) bool) <-chan map[string]int {
 	ch := make(chan map[string]int, 1)
 	go func() {
 		defer close(ch)
@@ -122,7 +124,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 		wg.Wait()
 		logging.Info("vocab size: %d", wds.Size())
 
-		tokens := getTokens(wds) // {d: 5, e: 8, p: 5, ...}
+		tokens := getTokens(wds, filter) // {d: 5, e: 8, p: 5, ...}
 		logging.Info("got %d tokens of rune", len(tokens))
 		ch <- tokens
 		if len(tokens) >= size {
@@ -137,7 +139,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 				return
 			}
 			expect := size - len(tokens)
-			bests := bestStats(stats, minFreq, expect) // {d,e}, ...
+			bests := bestStats(stats, expect) // {d,e}, ...
 			if len(bests) == 0 {
 				return
 			}
@@ -148,7 +150,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, minFreq, size int) <-c
 			logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
 			wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
 			logging.Info("round %d, vocab size: %d", i, wds.Size())
-			tokens = getTokens(wds) // {de: 5, e: 8, p: 5, ...}
+			tokens = getTokens(wds, filter) // {de: 5, e: 8, p: 5, ...}
 			logging.Info("round %d, got %d tokens", i, len(tokens))
 			ch <- tokens
 			if len(tokens) >= size {
@@ -295,7 +297,7 @@ func parallelMerge[Key vocab | string](arr []map[Key]int, total int) map[Key]int
 	return ret
 }
 
-func getTokens(wds words) map[string]int {
+func getTokens(wds words, filter FilterFunc) map[string]int {
 	mps := make([]map[string]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[string]int)
@@ -309,7 +311,15 @@ func getTokens(wds words) map[string]int {
 		}
 		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
-	return parallelMerge(mps, total)
+	ret := parallelMerge(mps, total)
+	if filter != nil {
+		for k, v := range ret {
+			if !filter(k, v) {
+				delete(ret, k)
+			}
+		}
+	}
+	return ret
 }
 
 func getStats(wds words) map[vocab]int {
@@ -335,7 +345,7 @@ func getStats(wds words) map[vocab]int {
 	return parallelMerge(mps, total)
 }
 
-func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
+func bestStats(stats map[vocab]int, size int) []vocab {
 	type pair struct {
 		voc  vocab
 		freq int
@@ -350,9 +360,6 @@ func bestStats(stats map[vocab]int, minFreq, size int) []vocab {
 	var ret []vocab
 	prefix := make(map[string]struct{})
 	for i := 0; i < size; i++ {
-		if arr[i].freq < minFreq {
-			return ret
-		}
 		if _, ok := prefix[arr[i].voc.word]; ok {
 			return ret
 		}
