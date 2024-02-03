@@ -139,6 +139,10 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(
 				return
 			}
 			expect := size - len(tokens)
+			expect = int(float64(expect) * 0.1) // 每轮增加10%
+			if expect < 1 {
+				expect = 1
+			}
 			bests := bestStats(stats, expect) // {d,e}, ...
 			if len(bests) == 0 {
 				return
@@ -357,14 +361,17 @@ func bestStats(stats map[vocab]int, size int) []vocab {
 	sort.Slice(arr, func(i, j int) bool {
 		return arr[i].freq > arr[j].freq
 	})
+	if len(arr) < size {
+		size = len(arr)
+	}
 	var ret []vocab
-	prefix := make(map[string]struct{})
+	// prefix := make(map[string]struct{})
 	for i := 0; i < size; i++ {
-		if _, ok := prefix[arr[i].voc.word]; ok {
-			return ret
-		}
+		// if _, ok := prefix[arr[i].voc.word]; ok {
+		// 	return ret
+		// }
 		ret = append(ret, arr[i].voc)
-		prefix[arr[i].voc.word] = struct{}{}
+		// prefix[arr[i].voc.word] = struct{}{}
 	}
 	return ret
 }
