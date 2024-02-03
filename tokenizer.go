@@ -148,9 +148,11 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(
 				return
 			}
 			expect := size - len(tokens)
-			expect = int(float64(expect) * 0.1) // 每轮增加10%
-			if expect < 1 {
-				expect = 1
+			if expect > 100 {
+				expect = int(float64(expect) * 0.1) // 每轮增加10%
+				if expect < 1 {
+					expect = 1
+				}
 			}
 			bests := bestStats(stats, expect) // {d,e}, ...
 			if len(bests) == 0 {
