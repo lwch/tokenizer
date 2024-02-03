@@ -244,14 +244,12 @@ type pair struct {
 	freq  int
 }
 
-func parallel(wds words, fn func(i int, p pair)) {
+func parallel(wds words, fn func(i int, ch <-chan pair)) {
 	var wg sync.WaitGroup
 	ch := make(chan pair, 1000)
 	worker := func(i int) {
 		defer wg.Done()
-		for p := range ch {
-			fn(i, p)
-		}
+		fn(i, ch)
 	}
 	n := runtime.NumCPU()
 	// n = 1
@@ -307,13 +305,16 @@ func getTokens(wds words, filter FilterFunc) map[string]int {
 		mps[i] = make(map[string]int)
 	}
 	var total int
-	parallel(wds, func(i int, p pair) {
-		n := p.block.Len()
-		for j := 0; j < n; j++ {
-			str := p.block.Get(j)
-			mps[i][str] += p.freq
+	parallel(wds, func(i int, ch <-chan pair) {
+		mp := mps[i]
+		for p := range ch {
+			n := p.block.Len()
+			for j := 0; j < n; j++ {
+				str := p.block.Get(j)
+				mp[str] += p.freq
+			}
+			total = len(mps[i]) // 不是准确的，仅用来预估数据量
 		}
-		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
 	ret := parallelMerge(mps, total)
 	if filter != nil {
@@ -332,19 +333,22 @@ func getStats(wds words) map[vocab]int {
 		mps[i] = make(map[vocab]int)
 	}
 	var total int
-	parallel(wds, func(i int, p pair) {
-		n := p.block.Len()
-		var word string
-		if n > 0 {
-			word = p.block.Get(0)
+	parallel(wds, func(i int, p <-chan pair) {
+		mp := mps[i]
+		for p := range p {
+			n := p.block.Len()
+			var word string
+			if n > 0 {
+				word = p.block.Get(0)
+			}
+			for j := 0; j < n-1; j++ {
+				next := p.block.Get(j + 1)
+				key := vocab{word: word, next: next}
+				mp[key] += p.freq
+				word = next
+			}
+			total = len(mps[i]) // 不是准确的，仅用来预估数据量
 		}
-		for j := 0; j < n-1; j++ {
-			next := p.block.Get(j + 1)
-			key := vocab{word: word, next: next}
-			mps[i][key] += p.freq
-			word = next
-		}
-		total = len(mps[i]) // 不是准确的，仅用来预估数据量
 	})
 	return parallelMerge(mps, total)
 }
@@ -365,13 +369,8 @@ func bestStats(stats map[vocab]int, size int) []vocab {
 		size = len(arr)
 	}
 	var ret []vocab
-	// prefix := make(map[string]struct{})
 	for i := 0; i < size; i++ {
-		// if _, ok := prefix[arr[i].voc.word]; ok {
-		// 	return ret
-		// }
 		ret = append(ret, arr[i].voc)
-		// prefix[arr[i].voc.word] = struct{}{}
 	}
 	return ret
 }
@@ -381,15 +380,18 @@ func mergeVocab(wds words, bests []vocab) words {
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[block]int)
 	}
-	parallel(wds, func(i int, p pair) {
-		block := p.block
-		for _, best := range bests {
-			idx := block.Merge(best.word, best.next, 0)
-			for idx != -1 {
-				idx = block.Merge(best.word, best.next, idx)
+	parallel(wds, func(i int, ch <-chan pair) {
+		mp := mps[i]
+		for p := range ch {
+			block := p.block
+			for _, best := range bests {
+				idx := block.Merge(best.word, best.next, 0)
+				for idx != -1 {
+					idx = block.Merge(best.word, best.next, idx)
+				}
 			}
+			mp[block] = p.freq
 		}
-		mps[i][block] = p.freq
 	})
 	return mps
 }
