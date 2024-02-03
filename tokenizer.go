@@ -35,9 +35,18 @@ func (t *Tokenizer) AddSpecialTokens(token ...rune) {
 	}
 }
 
-type vocab struct {
-	word string
-	next string
+type stat struct {
+	l1    int
+	l2    int
+	words [maxSeq]rune
+}
+
+func (s stat) Word() string {
+	return string(s.words[:s.l1])
+}
+
+func (s stat) Next() string {
+	return string(s.words[s.l1 : s.l1+s.l2])
 }
 
 type limitReader struct {
@@ -149,7 +158,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(
 			}
 			var logs []string
 			for _, best := range bests {
-				logs = append(logs, fmt.Sprintf("(%s, %s)", best.word, best.next))
+				logs = append(logs, fmt.Sprintf("(%s, %s)", best.Word(), best.Next()))
 			}
 			logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
 			wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
@@ -264,7 +273,7 @@ func parallel(wds words, fn func(i int, ch <-chan pair)) {
 	wg.Wait()
 }
 
-func parallelMerge[Key vocab | string](arr []map[Key]int, total int) map[Key]int {
+func parallelMerge[Key stat | string](arr []map[Key]int, total int) map[Key]int {
 	type pair struct {
 		key Key
 		val int
@@ -327,10 +336,10 @@ func getTokens(wds words, filter FilterFunc) map[string]int {
 	return ret
 }
 
-func getStats(wds words) map[vocab]int {
-	mps := make([]map[vocab]int, runtime.NumCPU())
+func getStats(wds words) map[stat]int {
+	mps := make([]map[stat]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
-		mps[i] = make(map[vocab]int)
+		mps[i] = make(map[stat]int)
 	}
 	var total int
 	parallel(wds, func(i int, p <-chan pair) {
@@ -343,7 +352,9 @@ func getStats(wds words) map[vocab]int {
 			}
 			for j := 0; j < n-1; j++ {
 				next := p.block.Get(j + 1)
-				key := vocab{word: word, next: next}
+				key := stat{l1: len([]rune(word)), l2: len([]rune(next))}
+				copy(key.words[:], []rune(word))
+				copy(key.words[key.l1:], []rune(next))
 				mp[key] += p.freq
 				word = next
 			}
@@ -353,9 +364,9 @@ func getStats(wds words) map[vocab]int {
 	return parallelMerge(mps, total)
 }
 
-func bestStats(stats map[vocab]int, size int) []vocab {
+func bestStats(stats map[stat]int, size int) []stat {
 	type pair struct {
-		voc  vocab
+		voc  stat
 		freq int
 	}
 	arr := make([]pair, 0, len(stats))
@@ -368,14 +379,14 @@ func bestStats(stats map[vocab]int, size int) []vocab {
 	if len(arr) < size {
 		size = len(arr)
 	}
-	var ret []vocab
+	var ret []stat
 	for i := 0; i < size; i++ {
 		ret = append(ret, arr[i].voc)
 	}
 	return ret
 }
 
-func mergeVocab(wds words, bests []vocab) words {
+func mergeVocab(wds words, bests []stat) words {
 	mps := make(words, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[block]int)
@@ -385,9 +396,9 @@ func mergeVocab(wds words, bests []vocab) words {
 		for p := range ch {
 			block := p.block
 			for _, best := range bests {
-				idx := block.Merge(best.word, best.next, 0)
+				idx := block.Merge(best.Word(), best.Next(), 0)
 				for idx != -1 {
-					idx = block.Merge(best.word, best.next, idx)
+					idx = block.Merge(best.Word(), best.Next(), idx)
 				}
 			}
 			mp[block] = p.freq
