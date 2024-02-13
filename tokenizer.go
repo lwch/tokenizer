@@ -147,7 +147,8 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 
 		tokens := getTokens(dict, wds, filter) // {d: 5, e: 8, p: 5, ...}
 		logging.Info("got %d tokens of rune", len(tokens))
-		ch <- t.appendSpecialTokens(tokens)
+		tokens = t.appendSpecialTokens(tokens)
+		ch <- tokens
 		if len(tokens) >= size {
 			return
 		}
@@ -179,7 +180,8 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			logging.Info("round %d, vocab size: %d", i, wds.Size())
 			tokens = getTokens(dict, wds, filter) // {de: 5, e: 8, p: 5, ...}
 			logging.Info("round %d, got %d tokens", i, len(tokens))
-			ch <- t.appendSpecialTokens(tokens)
+			tokens = t.appendSpecialTokens(tokens)
+			ch <- tokens
 			if len(tokens) >= size {
 				return
 			}
