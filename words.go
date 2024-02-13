@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-const maxSeq = 8 // 单个token最大允许由8个字符组成
+const maxSeq = 16 // 单个token最大允许由16个字符组成
 
 type block struct {
 	length [maxSeq]uint8

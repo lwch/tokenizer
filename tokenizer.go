@@ -14,7 +14,7 @@ import (
 	"github.com/lwch/logging"
 )
 
-const readBlockSize = 100_000_000 // 1M
+const readBlockSize = 100_000_000 // 100M
 
 type Tokenizer struct {
 	specialTokens map[string]bool
