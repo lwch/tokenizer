@@ -268,12 +268,6 @@ func loadData(dict *dict, readers []io.ReadSeekCloser, specialTokens map[string]
 		}(i, r)
 	}
 	wg.Wait()
-	for _, r := range readers {
-		_, err := r.Seek(0, io.SeekStart)
-		if err != nil {
-			panic(err)
-		}
-	}
 	return wds
 }
 
