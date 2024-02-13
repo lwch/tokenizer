@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unicode"
 
 	"github.com/lwch/logging"
 )
@@ -18,18 +17,18 @@ import (
 const readBlockSize = 100_000_000 // 1M
 
 type Tokenizer struct {
-	specialTokens map[rune]bool
+	specialTokens map[string]bool
 }
 
 type FilterFunc func(string, int) bool
 
 func New() *Tokenizer {
 	return &Tokenizer{
-		specialTokens: make(map[rune]bool),
+		specialTokens: make(map[string]bool),
 	}
 }
 
-func (t *Tokenizer) AddSpecialTokens(token ...rune) {
+func (t *Tokenizer) AddSpecialTokens(token ...string) {
 	for _, v := range token {
 		t.specialTokens[v] = true
 	}
@@ -50,15 +49,35 @@ func (s stat) Next() string {
 }
 
 type limitReader struct {
-	f *os.File
-	r io.Reader
+	f     *os.File
+	r     io.Reader
+	begin int64
+	size  int64
 }
 
-func newLimitReader(f *os.File, n int64) *limitReader {
-	return &limitReader{
-		f: f,
-		r: io.LimitReader(f, n),
+func newLimitReader(f *os.File, begin, size int64) (*limitReader, error) {
+	_, err := f.Seek(begin, io.SeekStart)
+	if err != nil {
+		return nil, err
 	}
+	return &limitReader{
+		f:     f,
+		r:     io.LimitReader(f, size),
+		begin: begin,
+		size:  size,
+	}, nil
+}
+
+func (r *limitReader) Seek(offset int64, whence int) (int64, error) {
+	if whence != io.SeekStart {
+		return 0, fmt.Errorf("unsupported whence: %d", whence)
+	}
+	n, err := r.f.Seek(offset+r.begin, io.SeekStart)
+	if err != nil {
+		return n, err
+	}
+	r.r = io.LimitReader(r.f, r.size-offset)
+	return n - r.begin, nil
 }
 
 func (r *limitReader) Read(p []byte) (int, error) {
@@ -70,7 +89,7 @@ func (r *limitReader) Close() error {
 }
 
 func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[string]int, error) {
-	var readers []io.ReadCloser
+	var readers []io.ReadSeekCloser
 	clear := func() {
 		for _, r := range readers {
 			r.Close()
@@ -91,58 +110,51 @@ func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-c
 			if i*readBlockSize >= fi.Size() {
 				break
 			}
-			_, err = f.Seek(i*readBlockSize, io.SeekStart)
+			r, err := newLimitReader(f, i*readBlockSize, readBlockSize)
 			if err != nil {
 				clear()
 				return nil, err
 			}
-			readers = append(readers, newLimitReader(f, readBlockSize))
+			readers = append(readers, r)
 		}
 	}
 	return t.TrainReaders(readers, size, filter), nil
 }
 
-func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[string]int {
-	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadCloser{io.NopCloser(r)}, size, filter)
+type nopCloser struct {
+	io.ReadSeeker
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(string, int) bool) <-chan map[string]int {
+func (nopCloser) Close() error {
+	return nil
+}
+
+func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[string]int {
+	r := strings.NewReader(str)
+	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, filter)
+}
+
+func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan map[string]int {
 	ch := make(chan map[string]int, 1)
 	go func() {
 		defer close(ch)
 
-		var wg sync.WaitGroup
-		wg.Add(len(readers))
+		dict := buildDict(readers)
+		logging.Info("dict size: %d", dict.Size())
 
-		var readen atomic.Uint64
-		var pending atomic.Int64
-		pending.Add(int64(len(readers)))
-		wds := make(words, len(readers)) // {d e e p: 5, l e a r n i n g: 3, ...}
-		for i, r := range readers {
-			go func(i int, r io.ReadCloser) {
-				defer wg.Done()
-				defer r.Close()
-				var cnt int
-				wds[i], cnt = getWords(r, t.specialTokens)
-				readen.Add(uint64(cnt))
-				pending.Add(-1)
-				logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
-			}(i, r)
-		}
-		wg.Wait()
+		wds := loadData(dict, readers, t.specialTokens)
 		logging.Info("vocab size: %d", wds.Size())
 
-		tokens := getTokens(wds, filter) // {d: 5, e: 8, p: 5, ...}
+		tokens := getTokens(dict, wds, filter) // {d: 5, e: 8, p: 5, ...}
 		logging.Info("got %d tokens of rune", len(tokens))
-		ch <- tokens
+		ch <- t.appendSpecialTokens(tokens)
 		if len(tokens) >= size {
 			return
 		}
 		var i int
 		for {
 			i++
-			stats := getStats(wds) // {{d,e}: 5, {e,p}: 5, ...}
+			stats := getStats(dict, wds) // {{d,e}: 5, {e,p}: 5, ...}
 			logging.Info("round %d, stats size: %d", i, len(stats))
 			if len(stats) == 0 {
 				return
@@ -163,11 +175,11 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(
 				logs = append(logs, fmt.Sprintf("(%s, %s)", best.Word(), best.Next()))
 			}
 			logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
-			wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
+			wds = mergeVocab(dict, wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
 			logging.Info("round %d, vocab size: %d", i, wds.Size())
-			tokens = getTokens(wds, filter) // {de: 5, e: 8, p: 5, ...}
+			tokens = getTokens(dict, wds, filter) // {de: 5, e: 8, p: 5, ...}
 			logging.Info("round %d, got %d tokens", i, len(tokens))
-			ch <- tokens
+			ch <- t.appendSpecialTokens(tokens)
 			if len(tokens) >= size {
 				return
 			}
@@ -176,63 +188,120 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadCloser, size int, filter func(
 	return ch
 }
 
-func getWords(r io.Reader, specialTokens map[rune]bool) (map[block]int, int) {
+func (t *Tokenizer) appendSpecialTokens(tokens map[string]int) map[string]int {
+	for k := range t.specialTokens {
+		if _, ok := tokens[k]; !ok {
+			tokens[k] = 0
+		}
+	}
+	return tokens
+}
+
+func buildDict(readers []io.ReadSeekCloser) *dict {
+	var wg sync.WaitGroup
+	wg.Add(len(readers))
+	var readen atomic.Uint64
+	var pending atomic.Int64
+	pending.Add(int64(len(readers)))
+	mps := make([]map[rune]struct{}, len(readers))
+	for i, r := range readers {
+		go func(i int, r io.Reader) {
+			defer wg.Done()
+			mp := make(map[rune]struct{})
+			rd := bufio.NewReader(r)
+			var cnt int
+			for {
+				str, err := rd.ReadString('\n')
+				for _, ch := range str {
+					cnt++
+					mp[ch] = struct{}{}
+				}
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					logging.Error("read rune: %v", err)
+					return
+				}
+			}
+			mps[i] = mp
+
+			readen.Add(uint64(cnt))
+			pending.Add(-1)
+			logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
+		}(i, r)
+	}
+	wg.Wait()
+	ret := make(map[rune]struct{})
+	for _, mp := range mps {
+		for k := range mp {
+			ret[k] = struct{}{}
+		}
+	}
+	for _, r := range readers {
+		_, err := r.Seek(0, io.SeekStart)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return newDict(ret)
+}
+
+func loadData(dict *dict, readers []io.ReadSeekCloser, specialTokens map[string]bool) words {
+	var wg sync.WaitGroup
+	wg.Add(len(readers))
+	var readen atomic.Uint64
+	var pending atomic.Int64
+	pending.Add(int64(len(readers)))
+	wds := make(words, len(readers)) // {d e e p: 5, l e a r n i n g: 3, ...}
+	for i, r := range readers {
+		go func(i int, r io.ReadCloser) {
+			defer wg.Done()
+			defer r.Close()
+			var cnt int
+			wds[i], cnt = getWords(dict, r, specialTokens)
+			readen.Add(uint64(cnt))
+			pending.Add(-1)
+			logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
+		}(i, r)
+	}
+	wg.Wait()
+	for _, r := range readers {
+		_, err := r.Seek(0, io.SeekStart)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return wds
+}
+
+func getWords(dict *dict, r io.Reader, specialTokens map[string]bool) (map[block]int, int) {
 	ret := make(map[block]int)
 	rd := bufio.NewReader(r)
 	var tmp []rune
 	var cnt int
+	trimSpecialTokens := func() ([]rune, bool) {
+		str := string(tmp)
+		for k := range specialTokens {
+			if strings.HasSuffix(str, k) {
+				return tmp[:len(tmp)-len(k)], true
+			}
+		}
+		return tmp, false
+	}
 	for {
 		str, err := rd.ReadString('\n')
 		for _, ch := range str {
 			cnt++
-			switch {
-			case ch == '%': // 百分比
-				if len(tmp) == 0 {
-					ret[buildBlock([]rune{ch})]++
-					continue
-				}
-				isNumber := true
-				for _, ch := range tmp {
-					if (ch < '0' || ch > '9') && ch != '.' {
-						isNumber = false
-						break
-					}
-				}
-				if !isNumber {
-					ret[buildBlock(tmp)]++
-					ret[buildBlock([]rune{ch})]++
-					tmp = tmp[:0]
-				}
-			case ch == '.': // 小数
-				if len(tmp) == 0 {
-					ret[buildBlock([]rune{ch})]++
-					continue
-				}
-				isNumber := true
-				for _, ch := range tmp {
-					if ch < '0' || ch > '9' {
-						isNumber = false
-						break
-					}
-				}
-				if !isNumber {
-					ret[buildBlock(tmp)]++
-					ret[buildBlock([]rune{ch})]++
-					tmp = tmp[:0]
-				}
-			case unicode.IsPunct(ch) || unicode.IsSpace(ch) || specialTokens[ch]:
-				if len(tmp) == 0 {
-					ret[buildBlock([]rune{ch})]++
-					continue
-				}
-				ret[buildBlock(tmp)]++
-				ret[buildBlock([]rune{ch})]++
+			tmp = append(tmp, ch)
+			var ok bool
+			if tmp, ok = trimSpecialTokens(); ok {
+				ret[buildBlock(dict, tmp)]++
 				tmp = tmp[:0]
-			default:
-				tmp = append(tmp, ch)
+				continue
 			}
 			if len(tmp) >= maxSeq {
-				ret[buildBlock(tmp)]++
+				ret[buildBlock(dict, tmp)]++
 				tmp = tmp[:0]
 			}
 		}
@@ -245,7 +314,8 @@ func getWords(r io.Reader, specialTokens map[rune]bool) (map[block]int, int) {
 		}
 	}
 	if len(tmp) > 0 {
-		ret[buildBlock(tmp)]++
+		tmp, _ = trimSpecialTokens()
+		ret[buildBlock(dict, tmp)]++
 	}
 	return ret, cnt
 }
@@ -310,7 +380,7 @@ func parallelMerge[Key stat | string](arr []map[Key]int, total int) map[Key]int 
 	return ret
 }
 
-func getTokens(wds words, filter FilterFunc) map[string]int {
+func getTokens(dict *dict, wds words, filter FilterFunc) map[string]int {
 	mps := make([]map[string]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[string]int)
@@ -321,7 +391,7 @@ func getTokens(wds words, filter FilterFunc) map[string]int {
 		for p := range ch {
 			n := p.block.Len()
 			for j := 0; j < n; j++ {
-				str := p.block.Get(j)
+				str := p.block.Get(dict, j)
 				mp[str] += p.freq
 			}
 			total = len(mps[i]) // 不是准确的，仅用来预估数据量
@@ -338,7 +408,7 @@ func getTokens(wds words, filter FilterFunc) map[string]int {
 	return ret
 }
 
-func getStats(wds words) map[stat]int {
+func getStats(dict *dict, wds words) map[stat]int {
 	mps := make([]map[stat]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[stat]int)
@@ -350,10 +420,10 @@ func getStats(wds words) map[stat]int {
 			n := p.block.Len()
 			var word string
 			if n > 0 {
-				word = p.block.Get(0)
+				word = p.block.Get(dict, 0)
 			}
 			for j := 0; j < n-1; j++ {
-				next := p.block.Get(j + 1)
+				next := p.block.Get(dict, j+1)
 				key := stat{l1: len([]rune(word)), l2: len([]rune(next))}
 				copy(key.words[:], []rune(word))
 				copy(key.words[key.l1:], []rune(next))
@@ -388,7 +458,7 @@ func bestStats(stats map[stat]int, size int) []stat {
 	return ret
 }
 
-func mergeVocab(wds words, bests []stat) words {
+func mergeVocab(dict *dict, wds words, bests []stat) words {
 	mps := make(words, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[block]int)
@@ -398,9 +468,9 @@ func mergeVocab(wds words, bests []stat) words {
 		for p := range ch {
 			block := p.block
 			for _, best := range bests {
-				idx := block.Merge(best.Word(), best.Next(), 0)
+				idx := block.Merge(dict, best.Word(), best.Next(), 0)
 				for idx != -1 {
-					idx = block.Merge(best.Word(), best.Next(), idx)
+					idx = block.Merge(dict, best.Word(), best.Next(), idx)
 				}
 			}
 			mp[block] = p.freq
