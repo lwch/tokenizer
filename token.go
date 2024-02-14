@@ -13,7 +13,10 @@ func (t token) Len() int {
 
 func (t token) String(dict *dict) string {
 	var ret []rune
-	for i := 0; i < t.Len(); i++ {
+	for i := 0; i < maxSeq; i++ {
+		if t[i] == 0 {
+			break
+		}
 		ret = append(ret, dict.Rune(t[i]))
 	}
 	return string(ret)
