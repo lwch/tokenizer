@@ -35,17 +35,16 @@ func (t *Tokenizer) AddSpecialTokens(token ...string) {
 }
 
 type stat struct {
-	l1    int
-	l2    int
-	words [maxSeq]rune
+	word token
+	next token
 }
 
-func (s stat) Word() string {
-	return string(s.words[:s.l1])
+func (s stat) Word() token {
+	return s.word
 }
 
-func (s stat) Next() string {
-	return string(s.words[s.l1 : s.l1+s.l2])
+func (s stat) Next() token {
+	return s.next
 }
 
 type limitReader struct {
@@ -155,7 +154,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		var i int
 		for {
 			i++
-			stats := getStats(dict, wds) // {{d,e}: 5, {e,p}: 5, ...}
+			stats := getStats(wds) // {{d,e}: 5, {e,p}: 5, ...}
 			logging.Info("round %d, stats size: %d", i, len(stats))
 			if len(stats) == 0 {
 				return
@@ -173,10 +172,12 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			}
 			var logs []string
 			for _, best := range bests {
-				logs = append(logs, fmt.Sprintf("(%s, %s)", best.Word(), best.Next()))
+				logs = append(logs, fmt.Sprintf("(%s, %s)",
+					best.Word().String(dict), best.Next().String(dict),
+				))
 			}
 			logging.Info("round %d, found best stats: %s", i, strings.Join(logs, " "))
-			wds = mergeVocab(dict, wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
+			wds = mergeVocab(wds, bests) // {de e p: 5, l e a r n i n g: 3, ...}
 			logging.Info("round %d, vocab size: %d", i, wds.Size())
 			tokens = getTokens(dict, wds, filter) // {de: 5, e: 8, p: 5, ...}
 			logging.Info("round %d, got %d tokens", i, len(tokens))
@@ -341,7 +342,7 @@ func parallel(wds words, fn func(i int, ch <-chan pair)) {
 	wg.Wait()
 }
 
-func parallelMerge[Key stat | string](arr []map[Key]int, total int) map[Key]int {
+func parallelMerge[Key stat | token](arr []map[Key]int, total int) map[Key]int {
 	type pair struct {
 		key Key
 		val int
@@ -377,9 +378,9 @@ func parallelMerge[Key stat | string](arr []map[Key]int, total int) map[Key]int 
 }
 
 func getTokens(dict *dict, wds words, filter FilterFunc) map[string]int {
-	mps := make([]map[string]int, runtime.NumCPU())
+	mps := make([]map[token]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
-		mps[i] = make(map[string]int)
+		mps[i] = make(map[token]int)
 	}
 	var total int
 	parallel(wds, func(i int, ch <-chan pair) {
@@ -387,24 +388,28 @@ func getTokens(dict *dict, wds words, filter FilterFunc) map[string]int {
 		for p := range ch {
 			n := p.block.Len()
 			for j := 0; j < n; j++ {
-				str := p.block.Get(dict, j)
+				str := p.block.Get(j)
 				mp[str] += p.freq
 			}
 			total = len(mps[i]) // 不是准确的，仅用来预估数据量
 		}
 	})
-	ret := parallelMerge(mps, total)
+	tmp := parallelMerge(mps, total)
 	if filter != nil {
-		for k, v := range ret {
-			if !filter(k, v) {
-				delete(ret, k)
+		for k, v := range tmp {
+			if !filter(k.String(dict), v) {
+				delete(tmp, k)
 			}
 		}
+	}
+	ret := make(map[string]int, len(tmp))
+	for k, v := range tmp {
+		ret[k.String(dict)] = v
 	}
 	return ret
 }
 
-func getStats(dict *dict, wds words) map[stat]int {
+func getStats(wds words) map[stat]int {
 	mps := make([]map[stat]int, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[stat]int)
@@ -414,15 +419,13 @@ func getStats(dict *dict, wds words) map[stat]int {
 		mp := mps[i]
 		for p := range p {
 			n := p.block.Len()
-			var word string
+			var word token
 			if n > 0 {
-				word = p.block.Get(dict, 0)
+				word = p.block.Get(0)
 			}
 			for j := 0; j < n-1; j++ {
-				next := p.block.Get(dict, j+1)
-				key := stat{l1: len([]rune(word)), l2: len([]rune(next))}
-				copy(key.words[:], []rune(word))
-				copy(key.words[key.l1:], []rune(next))
+				next := p.block.Get(j + 1)
+				key := stat{word: word, next: next}
 				mp[key] += p.freq
 				word = next
 			}
@@ -454,7 +457,7 @@ func bestStats(stats map[stat]int, size int) []stat {
 	return ret
 }
 
-func mergeVocab(dict *dict, wds words, bests []stat) words {
+func mergeVocab(wds words, bests []stat) words {
 	mps := make(words, runtime.NumCPU())
 	for i := 0; i < runtime.NumCPU(); i++ {
 		mps[i] = make(map[block]int)
@@ -464,9 +467,9 @@ func mergeVocab(dict *dict, wds words, bests []stat) words {
 		for p := range ch {
 			block := p.block
 			for _, best := range bests {
-				idx := block.Merge(dict, best.Word(), best.Next(), 0)
+				idx := block.Merge(best.Word(), best.Next(), 0)
 				for idx != -1 {
-					idx = block.Merge(dict, best.Word(), best.Next(), idx)
+					idx = block.Merge(best.Word(), best.Next(), idx)
 				}
 			}
 			mp[block] = p.freq
