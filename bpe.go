@@ -184,7 +184,6 @@ func (t *Tokenizer) getStats(seqs []*sequence, expect int) []stat {
 
 func (t *Tokenizer) merge(seqs []*sequence, stats []stat) {
 	parallel(seqs, func(_ int, s *sequence) {
-		for s.Merge(stats) {
-		}
+		s.Merge(stats)
 	})
 }

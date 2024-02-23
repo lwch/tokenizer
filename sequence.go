@@ -2,6 +2,7 @@ package tokenizer
 
 import (
 	"container/list"
+	"strings"
 )
 
 type sequence struct {
@@ -36,34 +37,32 @@ func (s *sequence) RangeStat(fn func(*dynamicToken, *dynamicToken)) {
 }
 
 func (s *sequence) String(dict *dict) string {
-	var ret string
+	var ret []string
 	for e := s.data.Front(); e != nil; e = e.Next() {
-		ret += e.Value.(*dynamicToken).String(dict)
+		ret = append(ret, "["+e.Value.(*dynamicToken).String(dict)+"]")
 	}
-	return ret
+	return strings.Join(ret, " => ")
 }
 
 func (s *sequence) Size() int {
 	return s.data.Len()
 }
 
-func (s *sequence) Merge(stats []stat) bool {
+func (s *sequence) Merge(stats []stat) {
 	begin := s.data.Front()
 	if begin == nil {
-		return false
+		return
 	}
-	var changed bool
 next:
 	for e := begin.Next(); e != nil; e = e.Next() {
 		for _, stat := range stats {
 			if equal(*begin.Value.(*dynamicToken), stat.word) && equal(*e.Value.(*dynamicToken), stat.next) {
 				begin.Value.(*dynamicToken).Merge(stat.next)
 				s.data.Remove(e)
-				changed = true
+				e = begin
 				continue next
 			}
 		}
 		begin = e
 	}
-	return changed
 }

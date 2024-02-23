@@ -167,6 +167,10 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			}
 			logging.Info("round %d, %d tokens left", i, total)
 
+			// for _, seq := range seqs {
+			// 	fmt.Println(seq.String(dict))
+			// }
+
 			tokens := t.getTokens(seqs, dict, filter)
 			tokens = t.appendSpecialTokens(tokens)
 			logging.Info("round %d, got %d tokens", i, len(tokens))
