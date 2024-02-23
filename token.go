@@ -22,6 +22,10 @@ func (t token) String(dict *dict) string {
 	return string(ret)
 }
 
+func (t *token) Merge(b *token) {
+	copy(t[t.Len():], b[:])
+}
+
 func equal(a, b token) bool {
 	for i := 0; i < maxSeq; i++ {
 		if a[i] != b[i] {
