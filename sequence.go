@@ -76,6 +76,7 @@ next:
 				s.lens[i] = 0
 				s.lens[idx1] += l
 				idx2 += int(l)
+				s.size--
 				continue next
 			}
 		}
