@@ -10,7 +10,7 @@ import (
 )
 
 const readBlockSize = 100_000_000 // 100M
-const maxSeq = 8                  // 单个token最大允许由8个字符组成
+const maxSeq = 16                 // 单个token最大允许由16个字符组成
 
 type Tokenizer struct {
 	specialTokens map[string]bool
