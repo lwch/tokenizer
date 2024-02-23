@@ -11,8 +11,8 @@ import (
 )
 
 type stat struct {
-	word staticToken
-	next staticToken
+	word token
+	next token
 }
 
 func buildDict(readers []io.ReadSeekCloser) *dict {
@@ -133,12 +133,12 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 }
 
 func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) map[string]int {
-	mps := make([]map[staticToken]int, len(seqs))
+	mps := make([]map[token]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
-		mp := make(map[staticToken]int)
-		seq.Range(func(tk *dynamicToken) {
-			mp[tk.ToStatic()]++
+		mp := make(map[token]int)
+		seq.Range(func(tk token) {
+			mp[tk]++
 		})
 		mps[i] = mp
 		total = len(mp)
@@ -162,11 +162,11 @@ func (t *Tokenizer) getStats(seqs []*sequence, expect int) []stat {
 	mps := make([]map[stat]int, len(seqs))
 	parallel(seqs, func(i int, seq *sequence) {
 		mp := make(map[stat]int)
-		seq.RangeStat(func(word, next *dynamicToken) {
+		seq.RangeStat(func(word, next token) {
 			if word.Len()+next.Len() > maxSeq {
 				return
 			}
-			mp[stat{word.ToStatic(), next.ToStatic()}]++
+			mp[stat{word, next}]++
 		})
 		mps[i] = mp
 	})

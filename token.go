@@ -1,8 +1,8 @@
 package tokenizer
 
-type staticToken [maxSeq]uint16
+type token [maxSeq]uint16
 
-func (t staticToken) Len() int {
+func (t token) Len() int {
 	for i := 0; i < maxSeq; i++ {
 		if t[i] == 0 {
 			return i
@@ -11,7 +11,7 @@ func (t staticToken) Len() int {
 	return maxSeq
 }
 
-func (t staticToken) String(dict *dict) string {
+func (t token) String(dict *dict) string {
 	var ret []rune
 	for i := 0; i < maxSeq; i++ {
 		if t[i] == 0 {
@@ -22,30 +22,7 @@ func (t staticToken) String(dict *dict) string {
 	return string(ret)
 }
 
-type dynamicToken []uint16
-
-func (t dynamicToken) Len() int {
-	return len(t)
-}
-
-func (t dynamicToken) ToStatic() staticToken {
-	var ret staticToken
-	copy(ret[:], t)
-	return ret
-}
-
-func (t dynamicToken) String(dict *dict) string {
-	var ret []rune
-	for _, id := range t {
-		ret = append(ret, dict.Rune(id))
-	}
-	return string(ret)
-}
-
-func equal(a dynamicToken, b staticToken) bool {
-	if len(a) != b.Len() {
-		return false
-	}
+func equal(a, b token) bool {
 	for i := 0; i < len(a); i++ {
 		if a[i] != b[i] {
 			return false
@@ -54,6 +31,6 @@ func equal(a dynamicToken, b staticToken) bool {
 	return true
 }
 
-func (t *dynamicToken) Merge(b staticToken) {
-	*t = append(*t, b[:b.Len()]...)
+func (t *token) Merge(b token) {
+	copy((*t)[t.Len():], b[:])
 }
