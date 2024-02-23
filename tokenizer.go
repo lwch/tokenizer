@@ -70,7 +70,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, size, maxLength int, filter FilterFunc) (<-chan map[string]int, error) {
 	var readers []io.ReadSeekCloser
 	clear := func() {
 		for _, r := range readers {
@@ -100,7 +100,7 @@ func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-c
 			readers = append(readers, r)
 		}
 	}
-	return t.TrainReaders(readers, size, filter), nil
+	return t.TrainReaders(readers, size, maxLength, filter), nil
 }
 
 type nopCloser struct {
@@ -111,12 +111,12 @@ func (nopCloser) Close() error {
 	return nil
 }
 
-func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, size, maxLength int, filter FilterFunc) <-chan map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, filter)
+	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, maxLength, filter)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size, maxLength int, filter FilterFunc) <-chan map[string]int {
 	ch := make(chan map[string]int, 1)
 	go func() {
 		defer close(ch)
@@ -148,7 +148,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			}
 			logging.Info("round %d, expect %d tokens", i, expect)
 
-			bests := t.getStats(seqs, expect)
+			bests := t.getStats(seqs, maxLength, expect)
 			if len(bests) == 0 {
 				return
 			}
