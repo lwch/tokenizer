@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/lwch/logging"
 )
 
-const readBlockSize = 100_000_000 // 100M
-const maxSeq = 16                 // 单个token最大允许由16个字符组成
+const maxSeq = 16 // 单个token最大允许由16个字符组成
 
 type Tokenizer struct {
 	specialTokens map[string]bool
@@ -77,22 +77,37 @@ func (t *Tokenizer) TrainFiles(files []string, size, maxLength int, filter Filte
 			r.Close()
 		}
 	}
+	var total int64
 	for _, file := range files {
 		fi, err := os.Stat(file)
 		if err != nil {
 			return nil, err
 		}
-		groups := fi.Size()/readBlockSize + 1
+		total += fi.Size()
+	}
+	blockSize := total / int64(runtime.NumCPU())
+	if blockSize < 1_000_000 { // 1M
+		blockSize = 1_000_000
+	}
+	if blockSize == 0 {
+		blockSize = total
+	}
+	for _, file := range files {
+		fi, err := os.Stat(file)
+		if err != nil {
+			return nil, err
+		}
+		groups := fi.Size()/blockSize + 1
 		for i := int64(0); i < groups; i++ {
 			f, err := os.Open(file)
 			if err != nil {
 				clear()
 				return nil, err
 			}
-			if i*readBlockSize >= fi.Size() {
+			if i*blockSize >= fi.Size() {
 				break
 			}
-			r, err := newLimitReader(f, i*readBlockSize, readBlockSize)
+			r, err := newLimitReader(f, i*blockSize, blockSize)
 			if err != nil {
 				clear()
 				return nil, err
