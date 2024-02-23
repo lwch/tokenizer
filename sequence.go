@@ -1,12 +1,13 @@
 package tokenizer
 
 import (
-	"container/list"
 	"strings"
 )
 
 type sequence struct {
-	data list.List
+	tokens []uint16
+	lens   []byte
+	size   int
 }
 
 func newSequence() *sequence {
@@ -14,55 +15,72 @@ func newSequence() *sequence {
 }
 
 func (s *sequence) Push(ch uint16) {
-	var tk token
-	tk[0] = ch
-	s.data.PushBack(&tk)
+	s.tokens = append(s.tokens, ch)
+	s.lens = append(s.lens, 1)
+	s.size++
 }
 
 func (s *sequence) Range(fn func(token)) {
-	for e := s.data.Front(); e != nil; e = e.Next() {
-		fn(*e.Value.(*token))
+	idx := 0
+	for _, l := range s.lens {
+		if l == 0 {
+			continue
+		}
+		fn(buildToken(s.tokens[idx : idx+int(l)]))
+		idx += int(l)
 	}
 }
 
 func (s *sequence) RangeStat(fn func(token, token)) {
-	begin := s.data.Front()
-	if begin.Next() == nil {
-		return
-	}
-	for e := begin.Next(); e != nil; e = e.Next() {
-		fn(*begin.Value.(*token), *e.Value.(*token))
-		begin = e
+	idx1 := 0
+	l1 := s.lens[0]
+	idx2 := int(l1)
+	for i := 1; i < len(s.lens); i++ {
+		l2 := s.lens[i]
+		if l2 == 0 {
+			continue
+		}
+		fn(buildToken(s.tokens[idx1:idx1+int(l1)]), buildToken(s.tokens[idx2:idx2+int(l2)]))
+		idx1 += int(l1)
+		l1 = l2
+		idx2 += int(l2)
 	}
 }
 
 func (s *sequence) String(dict *dict) string {
 	var ret []string
-	for e := s.data.Front(); e != nil; e = e.Next() {
-		ret = append(ret, "["+e.Value.(*token).String(dict)+"]")
-	}
+	s.Range(func(tk token) {
+		ret = append(ret, "["+tk.String(dict)+"]")
+	})
 	return strings.Join(ret, " => ")
 }
 
 func (s *sequence) Size() int {
-	return s.data.Len()
+	return s.size
 }
 
 func (s *sequence) Merge(stats []stat) {
-	begin := s.data.Front()
-	if begin == nil {
-		return
-	}
+	idx1 := 0
+	word := buildToken(s.tokens[:s.lens[0]])
+	idx2 := int(s.lens[0])
 next:
-	for e := begin.Next(); e != nil; e = e.Next() {
+	for i := 1; i < len(s.lens); i++ {
+		l := s.lens[i]
+		if l == 0 {
+			continue
+		}
+		next := buildToken(s.tokens[idx2 : idx2+int(l)])
 		for _, stat := range stats {
-			if equal(*begin.Value.(*token), stat.word) && equal(*e.Value.(*token), stat.next) {
-				begin.Value.(*token).Merge(stat.next)
-				s.data.Remove(e)
-				e = begin
+			if equal(stat.word, word) && equal(stat.next, next) {
+				word.Merge(next)
+				s.lens[i] = 0
+				s.lens[idx1] += l
+				idx2 += int(l)
 				continue next
 			}
 		}
-		begin = e
+		word = next
+		idx2 += int(l)
+		idx1 = i
 	}
 }

@@ -2,6 +2,12 @@ package tokenizer
 
 type token [maxSeq]uint16
 
+func buildToken(data []uint16) token {
+	var t token
+	copy(t[:], data)
+	return t
+}
+
 func (t token) Len() int {
 	for i := 0; i < maxSeq; i++ {
 		if t[i] == 0 {

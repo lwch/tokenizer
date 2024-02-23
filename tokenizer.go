@@ -170,6 +170,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			// for _, seq := range seqs {
 			// 	fmt.Println(seq.String(dict))
 			// }
+			// return
 
 			tokens = t.getTokens(seqs, dict, filter)
 			tokens = t.appendSpecialTokens(tokens)

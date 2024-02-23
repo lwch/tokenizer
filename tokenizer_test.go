@@ -11,7 +11,7 @@ const testData = "FloydHub is the fastest way to build, train and deploy deep le
 
 func TestTrain(t *testing.T) {
 	tk := New()
-	tk.AddSpecialTokens(" ")
+	// tk.AddSpecialTokens(" ")
 	for vocab := range tk.Train(testData, 32, nil) {
 		fmt.Println(vocab)
 	}
