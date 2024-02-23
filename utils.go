@@ -53,9 +53,9 @@ func parallelMerge[Key stat | token](arr []map[Key]int, total int) map[Key]int {
 	return ret
 }
 
-func sortMap[Key stat](mp map[Key]int) []Key {
+func sortMap(mp map[stat]int) []stat {
 	type pair struct {
-		key Key
+		key stat
 		val int
 	}
 	var arr []pair
@@ -65,7 +65,7 @@ func sortMap[Key stat](mp map[Key]int) []Key {
 	sort.Slice(arr, func(i, j int) bool {
 		return arr[i].val > arr[j].val
 	})
-	ret := make([]Key, len(arr))
+	ret := make([]stat, len(arr))
 	for i, p := range arr {
 		ret[i] = p.key
 	}

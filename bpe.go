@@ -160,6 +160,7 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) m
 
 func (t *Tokenizer) getStats(seqs []*sequence, expect int) []stat {
 	mps := make([]map[stat]int, len(seqs))
+	var total int
 	parallel(seqs, func(i int, seq *sequence) {
 		mp := make(map[stat]int)
 		seq.RangeStat(func(word, next token) {
@@ -169,11 +170,17 @@ func (t *Tokenizer) getStats(seqs []*sequence, expect int) []stat {
 			mp[stat{word, next}]++
 		})
 		mps[i] = mp
+		total = len(mp)
 	})
-	stats := sortMap(parallelMerge(mps, expect))
+	stats := sortMap(parallelMerge(mps, total))
 	logging.Info("%d stats found", len(stats))
 	var ret []stat
+	prefix := make(map[token]struct{})
 	for _, stat := range stats {
+		if _, ok := prefix[stat.word]; ok {
+			continue
+		}
+		prefix[stat.word] = struct{}{}
 		ret = append(ret, stat)
 		if len(ret) >= expect {
 			break
