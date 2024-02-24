@@ -132,7 +132,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 	return seq, cnt
 }
 
-func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict) map[string]int {
+func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) map[string]int {
 	mps := make([]map[token]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
@@ -146,7 +146,13 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict) map[string]int {
 	tmp := parallelMerge(mps, total)
 	ret := make(map[string]int, len(tmp))
 	for k, v := range tmp {
-		ret[k.String(dict)] = v
+		k := k.String(dict)
+		if filter != nil {
+			if !filter(k, v) {
+				continue
+			}
+		}
+		ret[k] = v
 	}
 	return ret
 }
