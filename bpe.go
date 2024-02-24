@@ -177,8 +177,13 @@ func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, maxLength, expect int
 			continue
 		}
 		if filter != nil {
-			word := pair.stat.word[:pair.stat.word.Len()]
-			next := pair.stat.next[:pair.stat.next.Len()]
+			dup := func(data []uint16) []uint16 {
+				ret := make([]uint16, len(data))
+				copy(ret, data)
+				return ret
+			}
+			word := dup(pair.stat.word[:pair.stat.word.Len()])
+			next := dup(pair.stat.next[:pair.stat.next.Len()])
 			str := buildToken(append(word, next...)).String(dict)
 			if !filter(str, pair.freq) {
 				continue
