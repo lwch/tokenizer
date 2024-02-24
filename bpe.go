@@ -177,7 +177,7 @@ func (t *Tokenizer) getStats(seqs []*sequence, maxLength, expect int) []stat {
 	var ret []stat
 	suffix := make(map[token]struct{})
 	for _, stat := range stats {
-		if _, ok := suffix[stat.word]; ok {
+		if _, ok := suffix[stat.next]; ok {
 			continue
 		}
 		suffix[stat.word] = struct{}{}
