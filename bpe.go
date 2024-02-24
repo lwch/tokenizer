@@ -180,7 +180,7 @@ func (t *Tokenizer) getStats(seqs []*sequence, maxLength, expect int) []stat {
 		if _, ok := suffix[stat.next]; ok {
 			continue
 		}
-		suffix[stat.word] = struct{}{}
+		suffix[stat.next] = struct{}{}
 		ret = append(ret, stat)
 		if len(ret) >= expect {
 			break
