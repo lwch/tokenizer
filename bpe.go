@@ -175,12 +175,16 @@ func (t *Tokenizer) getStats(seqs []*sequence, maxLength, expect int) []stat {
 	stats := sortMap(parallelMerge(mps, total))
 	logging.Info("%d stats found", len(stats))
 	var ret []stat
-	suffix := make(map[token]struct{})
+	exists := make(map[token]struct{})
 	for _, stat := range stats {
-		if _, ok := suffix[stat.next]; ok {
+		if _, ok := exists[stat.word]; ok {
 			continue
 		}
-		suffix[stat.next] = struct{}{}
+		if _, ok := exists[stat.next]; ok {
+			continue
+		}
+		exists[stat.word] = struct{}{}
+		exists[stat.next] = struct{}{}
 		ret = append(ret, stat)
 		if len(ret) >= expect {
 			break
