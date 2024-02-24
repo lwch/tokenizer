@@ -132,7 +132,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 	return seq, cnt
 }
 
-func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) map[string]int {
+func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict) map[string]int {
 	mps := make([]map[token]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
@@ -144,13 +144,6 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) m
 		total = len(mp)
 	})
 	tmp := parallelMerge(mps, total)
-	if filter != nil {
-		for k, v := range tmp {
-			if !filter(k.String(dict), v) {
-				delete(tmp, k)
-			}
-		}
-	}
 	ret := make(map[string]int, len(tmp))
 	for k, v := range tmp {
 		ret[k.String(dict)] = v
@@ -158,7 +151,7 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) m
 	return ret
 }
 
-func (t *Tokenizer) getStats(seqs []*sequence, maxLength, expect int) []stat {
+func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, maxLength, expect int, filter FilterFunc) []stat {
 	mps := make([]map[stat]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
@@ -172,20 +165,28 @@ func (t *Tokenizer) getStats(seqs []*sequence, maxLength, expect int) []stat {
 		mps[i] = mp
 		total = len(mp)
 	})
-	stats := sortMap(parallelMerge(mps, total))
-	logging.Info("%d stats found", len(stats))
+	pairs := sortMap(parallelMerge(mps, total))
+	logging.Info("%d stats found", len(pairs))
 	var ret []stat
 	exists := make(map[token]struct{})
-	for _, stat := range stats {
-		if _, ok := exists[stat.word]; ok {
+	for _, pair := range pairs {
+		if _, ok := exists[pair.stat.word]; ok {
 			continue
 		}
-		if _, ok := exists[stat.next]; ok {
+		if _, ok := exists[pair.stat.next]; ok {
 			continue
 		}
-		exists[stat.word] = struct{}{}
-		exists[stat.next] = struct{}{}
-		ret = append(ret, stat)
+		if filter != nil {
+			word := pair.stat.word[:pair.stat.word.Len()]
+			next := pair.stat.next[:pair.stat.next.Len()]
+			str := buildToken(append(word, next...)).String(dict)
+			if !filter(str, pair.freq) {
+				continue
+			}
+		}
+		exists[pair.stat.word] = struct{}{}
+		exists[pair.stat.next] = struct{}{}
+		ret = append(ret, pair.stat)
 		if len(ret) >= expect {
 			break
 		}

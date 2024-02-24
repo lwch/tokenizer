@@ -142,7 +142,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size, maxLength in
 		seqs, cnt := t.loadSequence(readers, dict)
 		logging.Info("total tokens: %d", cnt)
 
-		tokens := t.getTokens(seqs, dict, filter)
+		tokens := t.getTokens(seqs, dict)
 		tokens = t.appendSpecialTokens(tokens)
 		logging.Info("got %d tokens", len(tokens))
 
@@ -163,7 +163,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size, maxLength in
 			}
 			logging.Info("round %d, expect %d tokens", i, expect)
 
-			bests := t.getStats(seqs, maxLength, expect)
+			bests := t.getStats(seqs, dict, maxLength, expect, filter)
 			if len(bests) == 0 {
 				return
 			}
@@ -187,7 +187,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size, maxLength in
 			// }
 			// return
 
-			tokens = t.getTokens(seqs, dict, filter)
+			tokens = t.getTokens(seqs, dict)
 			tokens = t.appendSpecialTokens(tokens)
 			logging.Info("round %d, got %d tokens", i, len(tokens))
 
