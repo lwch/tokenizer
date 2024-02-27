@@ -163,7 +163,6 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		var i int
 		for {
 			i++
-			logging.Info("round %d", i)
 
 			best := t.getStats(seqs, filter)
 			if best == nil {
