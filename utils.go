@@ -1,9 +1,11 @@
 package tokenizer
 
 import (
+	"fmt"
 	"runtime"
 	"sort"
 	"sync"
+	"unicode"
 )
 
 func parallel(seqs []*sequence, fn func(int, *sequence)) {
@@ -66,5 +68,17 @@ func sortMap(mp map[stat]int) []pair {
 	sort.Slice(ret, func(i, j int) bool {
 		return ret[i].freq > ret[j].freq
 	})
+	return ret
+}
+
+func fmtShow(str string) string {
+	var ret string
+	for _, ch := range str {
+		if unicode.IsPrint(ch) {
+			ret += string(ch)
+		} else {
+			ret += fmt.Sprintf("\\u%x", ch)
+		}
+	}
 	return ret
 }

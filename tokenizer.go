@@ -170,7 +170,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			var logs []string
 			for _, best := range bests {
 				logs = append(logs, fmt.Sprintf("(%s, %s)",
-					best.word.String(dict), best.next.String(dict),
+					fmtShow(best.word.String(dict)), fmtShow(best.next.String(dict)),
 				))
 			}
 			logging.Info("round %d, best stats: %s", i, strings.Join(logs, " "))
