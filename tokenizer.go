@@ -14,6 +14,7 @@ const maxSeq = 32 // 单个token最大允许由32字节组成
 
 type Tokenizer struct {
 	specialTokens map[string]bool
+	dict          *dict
 }
 
 type FilterFunc func(Token, int) bool
@@ -136,14 +137,14 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 	go func() {
 		defer close(ch)
 
-		dict := buildDict(readers)
-		logging.Info("dict size: %d", dict.Size())
+		t.dict = buildDict(readers)
+		logging.Info("dict size: %d", t.dict.Size())
 
-		seqs, cnt := t.loadSequence(readers, dict)
+		seqs, cnt := t.loadSequence(readers)
 		logging.Info("total tokens: %d", cnt)
 
-		tokens := t.getTokens(seqs, dict, filter)
-		tokens = t.appendSpecialTokens(dict, tokens)
+		tokens := t.getTokens(seqs, filter)
+		tokens = t.appendSpecialTokens(tokens)
 		logging.Info("got %d tokens", len(tokens))
 
 		ch <- tokens
@@ -156,12 +157,12 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			i++
 			logging.Info("round %d", i)
 
-			best := t.getStats(seqs, dict, filter)
+			best := t.getStats(seqs, filter)
 			if best == nil {
 				return
 			}
 			logging.Info("round %d, best stats: (%s, %s)", i,
-				fmtShow(best.word.string(dict)), fmtShow(best.next.string(dict)))
+				fmtShow(best.word.string(t.dict)), fmtShow(best.next.string(t.dict)))
 
 			t.merge(seqs, best)
 			var total int
@@ -175,8 +176,8 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			// }
 			// return
 
-			tokens = t.getTokens(seqs, dict, filter)
-			tokens = t.appendSpecialTokens(dict, tokens)
+			tokens = t.getTokens(seqs, filter)
+			tokens = t.appendSpecialTokens(tokens)
 			logging.Info("round %d, got %d tokens", i, len(tokens))
 
 			ch <- tokens
@@ -188,12 +189,16 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 	return ch
 }
 
-func (t *Tokenizer) appendSpecialTokens(dict *dict, tokens map[Token]int) map[Token]int {
+func (t *Tokenizer) appendSpecialTokens(tokens map[Token]int) map[Token]int {
 	for k := range t.specialTokens {
-		k := buildToken(dict.Encode(k))
+		k := buildToken(t.dict.Encode(k))
 		if _, ok := tokens[k]; !ok {
 			tokens[k] = 0
 		}
 	}
 	return tokens
+}
+
+func (t *Tokenizer) Decode(tk Token) string {
+	return tk.string(t.dict)
 }

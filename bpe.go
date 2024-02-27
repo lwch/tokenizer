@@ -65,7 +65,7 @@ func buildDict(readers []io.ReadSeekCloser) *dict {
 	return newDict(ret)
 }
 
-func (t *Tokenizer) loadSequence(readers []io.ReadSeekCloser, dict *dict) ([]*sequence, int) {
+func (t *Tokenizer) loadSequence(readers []io.ReadSeekCloser) ([]*sequence, int) {
 	var wg sync.WaitGroup
 	var total atomic.Int64
 	seqs := make([]*sequence, len(readers))
@@ -74,7 +74,7 @@ func (t *Tokenizer) loadSequence(readers []io.ReadSeekCloser, dict *dict) ([]*se
 		go func(i int, r io.ReadCloser) {
 			defer wg.Done()
 			var cnt int64
-			seqs[i], cnt = t.buildSequence(r, dict)
+			seqs[i], cnt = t.buildSequence(r)
 			total.Add(cnt)
 		}(i, r)
 	}
@@ -82,7 +82,7 @@ func (t *Tokenizer) loadSequence(readers []io.ReadSeekCloser, dict *dict) ([]*se
 	return seqs, int(total.Load())
 }
 
-func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64) {
+func (t *Tokenizer) buildSequence(r io.ReadCloser) (*sequence, int64) {
 	defer r.Close()
 	var maxLen int
 	for token := range t.specialTokens {
@@ -112,7 +112,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 			}
 			if len(buf) > 0 {
 				cnt++
-				seq.Push(dict.ID(buf[0]))
+				seq.Push(t.dict.ID(buf[0]))
 				buf = buf[1:]
 			}
 		}
@@ -126,13 +126,13 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 	}
 	for len(buf) > 0 {
 		cnt++
-		seq.Push(dict.ID(buf[0]))
+		seq.Push(t.dict.ID(buf[0]))
 		buf = buf[1:]
 	}
 	return seq, cnt
 }
 
-func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) map[Token]int {
+func (t *Tokenizer) getTokens(seqs []*sequence, filter FilterFunc) map[Token]int {
 	mps := make([]map[Token]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
@@ -156,7 +156,7 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) m
 	return ret
 }
 
-func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, filter FilterFunc) *stat {
+func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) *stat {
 	mps := make([]map[stat]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
