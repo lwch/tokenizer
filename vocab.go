@@ -2,6 +2,7 @@ package tokenizer
 
 import (
 	"io"
+	"os"
 	"sort"
 )
 
@@ -171,4 +172,24 @@ func (v *Vocab) ReadFrom(r io.Reader) (int64, error) {
 			v.max = int(size)
 		}
 	}
+}
+
+func (v *Vocab) Save(dir string) error {
+	f, err := os.Create(dir)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = v.WriteTo(f)
+	return err
+}
+
+func (v *Vocab) Load(dir string) error {
+	f, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = v.ReadFrom(f)
+	return err
 }
