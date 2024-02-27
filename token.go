@@ -17,7 +17,7 @@ func (t Token) Len() int {
 	return maxSeq
 }
 
-func (t Token) string(dict *dict) string {
+func (t Token) bytes(dict *dict) []byte {
 	var ret []byte
 	for i := 0; i < maxSeq; i++ {
 		if t[i] == 0 {
@@ -25,7 +25,7 @@ func (t Token) string(dict *dict) string {
 		}
 		ret = append(ret, dict.Byte(t[i]))
 	}
-	return string(ret)
+	return ret
 }
 
 func equal(a, b Token) bool {

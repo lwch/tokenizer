@@ -162,7 +162,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 				return
 			}
 			logging.Info("round %d, best stats: (%s, %s)", i,
-				fmtShow(best.word.string(t.dict)), fmtShow(best.next.string(t.dict)))
+				fmtShow(best.word.bytes(t.dict)), fmtShow(best.next.bytes(t.dict)))
 
 			t.merge(seqs, best)
 			var total int
@@ -199,6 +199,6 @@ func (t *Tokenizer) appendSpecialTokens(tokens map[Token]int) map[Token]int {
 	return tokens
 }
 
-func (t *Tokenizer) Decode(tk Token) string {
-	return tk.string(t.dict)
+func (t *Tokenizer) Decode(tk Token) []byte {
+	return tk.bytes(t.dict)
 }

@@ -71,9 +71,19 @@ func sortMap(mp map[stat]int) []pair {
 	return ret
 }
 
-func fmtShow(str string) string {
+func fmtShow(data []byte) string {
+	if len(data) == 1 {
+		ch := rune(data[0])
+		if unicode.IsLetter(ch) ||
+			unicode.IsNumber(ch) ||
+			unicode.IsPunct(ch) ||
+			unicode.IsSpace(ch) {
+			return string(ch)
+		}
+		return fmt.Sprintf("\\u%x", ch)
+	}
 	var ret string
-	for _, ch := range str {
+	for _, ch := range string(data) {
 		if unicode.IsLetter(ch) ||
 			unicode.IsNumber(ch) ||
 			unicode.IsPunct(ch) ||

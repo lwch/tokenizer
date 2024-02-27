@@ -50,7 +50,7 @@ func (s *sequence) RangeStat(fn func(Token, Token)) {
 func (s *sequence) String(dict *dict) string {
 	var ret []string
 	s.Range(func(tk Token) {
-		ret = append(ret, "["+tk.string(dict)+"]")
+		ret = append(ret, "["+fmtShow(tk.bytes(dict))+"]")
 	})
 	return strings.Join(ret, " => ")
 }
