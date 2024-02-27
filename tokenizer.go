@@ -154,13 +154,14 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		var i int
 		for {
 			i++
-			expect := size - len(tokens)
-			if expect > 100 {
-				expect = int(float64(expect) * 0.1) // 每轮增加10%
-				if expect < 1 {
-					expect = 1
-				}
-			}
+			// expect := size - len(tokens)
+			// if expect > 100 {
+			// 	expect = int(float64(expect) * 0.1) // 每轮增加10%
+			// 	if expect < 1 {
+			// 		expect = 1
+			// 	}
+			// }
+			expect := 1
 			logging.Info("round %d, expect %d tokens", i, expect)
 
 			bests := t.getStats(seqs, dict, expect, filter)
