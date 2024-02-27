@@ -71,7 +71,7 @@ func sortMap(mp map[stat]int) []pair {
 	return ret
 }
 
-func fmtShow(data []byte) string {
+func fmtBytes(data []byte) string {
 	if len(data) == 1 {
 		ch := rune(data[0])
 		if unicode.IsLetter(ch) ||
