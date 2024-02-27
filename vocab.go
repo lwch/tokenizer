@@ -64,9 +64,14 @@ func (v *Vocab) Len() int {
 }
 
 func (v *Vocab) Tokens() [][]byte {
-	var ret [][]byte
-	for _, tk := range v.id2words {
-		ret = append(ret, tk.Bytes())
+	ret := make([][]byte, len(v.id2words))
+	var ids []int
+	for id := range v.id2words {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	for id := range ids {
+		ret[id] = v.id2words[id].Bytes()
 	}
 	return ret
 }
