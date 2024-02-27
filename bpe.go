@@ -157,7 +157,7 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) m
 	return ret
 }
 
-func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, expect int, filter FilterFunc) []stat {
+func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, filter FilterFunc) *stat {
 	mps := make([]map[stat]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
@@ -173,7 +173,6 @@ func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, expect int, filter Fi
 	})
 	pairs := sortMap(parallelMerge(mps, total))
 	logging.Info("%d stats found", len(pairs))
-	var ret []stat
 	exists := make(map[token]struct{})
 	for _, pair := range pairs {
 		if _, ok := exists[pair.stat.word]; ok {
@@ -197,16 +196,13 @@ func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, expect int, filter Fi
 		}
 		exists[pair.stat.word] = struct{}{}
 		exists[pair.stat.next] = struct{}{}
-		ret = append(ret, pair.stat)
-		if len(ret) >= expect {
-			break
-		}
+		return &pair.stat
 	}
-	return ret
+	return nil
 }
 
-func (t *Tokenizer) merge(seqs []*sequence, stats []stat) {
+func (t *Tokenizer) merge(seqs []*sequence, st *stat) {
 	parallel(seqs, func(_ int, s *sequence) {
-		s.Merge(stats)
+		s.Merge(st)
 	})
 }

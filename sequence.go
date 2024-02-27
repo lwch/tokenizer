@@ -59,7 +59,7 @@ func (s *sequence) Size() int {
 	return s.size
 }
 
-func (s *sequence) Merge(stats []stat) {
+func (s *sequence) Merge(st *stat) {
 	idx1 := 0
 	word := buildToken(s.tokens[:s.lens[0]])
 	idx2 := int(s.lens[0])
@@ -70,15 +70,13 @@ next:
 			continue
 		}
 		next := buildToken(s.tokens[idx2 : idx2+int(l)])
-		for _, stat := range stats {
-			if equal(stat.word, word) && equal(stat.next, next) {
-				word.Merge(next)
-				s.lens[i] = 0
-				s.lens[idx1] += l
-				idx2 += int(l)
-				s.size--
-				continue next
-			}
+		if equal(st.word, word) && equal(st.next, next) {
+			word.Merge(next)
+			s.lens[i] = 0
+			s.lens[idx1] += l
+			idx2 += int(l)
+			s.size--
+			continue next
 		}
 		word = next
 		idx2 += int(l)

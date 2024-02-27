@@ -154,29 +154,16 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		var i int
 		for {
 			i++
-			// expect := size - len(tokens)
-			// if expect > 100 {
-			// 	expect = int(float64(expect) * 0.1) // 每轮增加10%
-			// 	if expect < 1 {
-			// 		expect = 1
-			// 	}
-			// }
-			expect := 1
-			logging.Info("round %d, expect %d tokens", i, expect)
+			logging.Info("round %d", i)
 
-			bests := t.getStats(seqs, dict, expect, filter)
-			if len(bests) == 0 {
+			best := t.getStats(seqs, dict, filter)
+			if best == nil {
 				return
 			}
-			var logs []string
-			for _, best := range bests {
-				logs = append(logs, fmt.Sprintf("(%s, %s)",
-					fmtShow(best.word.String(dict)), fmtShow(best.next.String(dict)),
-				))
-			}
-			logging.Info("round %d, best stats: %s", i, strings.Join(logs, " "))
+			logging.Info("round %d, best stats: (%s, %s)", i,
+				fmtShow(best.word.String(dict)), fmtShow(best.next.String(dict)))
 
-			t.merge(seqs, bests)
+			t.merge(seqs, best)
 			var total int
 			for _, seq := range seqs {
 				total += seq.Size()
