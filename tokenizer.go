@@ -10,7 +10,7 @@ import (
 	"github.com/lwch/logging"
 )
 
-const maxSeq = 16 // 单个token最大允许由16个字符组成
+const maxSeq = 32 // 单个token最大允许由32字节组成
 
 type Tokenizer struct {
 	specialTokens map[string]bool
@@ -70,7 +70,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, size, maxLength int, filter FilterFunc) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[string]int, error) {
 	var readers []io.ReadSeekCloser
 	clear := func() {
 		for _, r := range readers {
@@ -115,7 +115,7 @@ func (t *Tokenizer) TrainFiles(files []string, size, maxLength int, filter Filte
 			readers = append(readers, r)
 		}
 	}
-	return t.TrainReaders(readers, size, maxLength, filter), nil
+	return t.TrainReaders(readers, size, filter), nil
 }
 
 type nopCloser struct {
@@ -126,12 +126,12 @@ func (nopCloser) Close() error {
 	return nil
 }
 
-func (t *Tokenizer) Train(str string, size, maxLength int, filter FilterFunc) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[string]int {
 	r := strings.NewReader(str)
-	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, maxLength, filter)
+	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, filter)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size, maxLength int, filter FilterFunc) <-chan map[string]int {
+func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan map[string]int {
 	ch := make(chan map[string]int, 1)
 	go func() {
 		defer close(ch)
@@ -163,7 +163,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size, maxLength in
 			}
 			logging.Info("round %d, expect %d tokens", i, expect)
 
-			bests := t.getStats(seqs, dict, maxLength, expect, filter)
+			bests := t.getStats(seqs, dict, expect, filter)
 			if len(bests) == 0 {
 				return
 			}

@@ -157,13 +157,13 @@ func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) m
 	return ret
 }
 
-func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, maxLength, expect int, filter FilterFunc) []stat {
+func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, expect int, filter FilterFunc) []stat {
 	mps := make([]map[stat]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
 		mp := make(map[stat]int)
 		seq.RangeStat(func(word, next token) {
-			if word.Len()+next.Len() > maxLength {
+			if word.Len()+next.Len() > maxSeq {
 				return
 			}
 			mp[stat{word, next}]++
