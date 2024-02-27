@@ -16,7 +16,7 @@ type Tokenizer struct {
 	specialTokens map[string]bool
 }
 
-type FilterFunc func(string, int) bool
+type FilterFunc func(Token, int) bool
 
 func New() *Tokenizer {
 	return &Tokenizer{
@@ -70,7 +70,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[string]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[Token]int, error) {
 	var readers []io.ReadSeekCloser
 	clear := func() {
 		for _, r := range readers {
@@ -126,13 +126,13 @@ func (nopCloser) Close() error {
 	return nil
 }
 
-func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[string]int {
+func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[Token]int {
 	r := strings.NewReader(str)
 	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, filter)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan map[string]int {
-	ch := make(chan map[string]int, 1)
+func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan map[Token]int {
+	ch := make(chan map[Token]int, 1)
 	go func() {
 		defer close(ch)
 
@@ -143,7 +143,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		logging.Info("total tokens: %d", cnt)
 
 		tokens := t.getTokens(seqs, dict, filter)
-		tokens = t.appendSpecialTokens(tokens)
+		tokens = t.appendSpecialTokens(dict, tokens)
 		logging.Info("got %d tokens", len(tokens))
 
 		ch <- tokens
@@ -161,7 +161,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 				return
 			}
 			logging.Info("round %d, best stats: (%s, %s)", i,
-				fmtShow(best.word.String(dict)), fmtShow(best.next.String(dict)))
+				fmtShow(best.word.string(dict)), fmtShow(best.next.string(dict)))
 
 			t.merge(seqs, best)
 			var total int
@@ -176,7 +176,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			// return
 
 			tokens = t.getTokens(seqs, dict, filter)
-			tokens = t.appendSpecialTokens(tokens)
+			tokens = t.appendSpecialTokens(dict, tokens)
 			logging.Info("round %d, got %d tokens", i, len(tokens))
 
 			ch <- tokens
@@ -188,8 +188,9 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 	return ch
 }
 
-func (t *Tokenizer) appendSpecialTokens(tokens map[string]int) map[string]int {
+func (t *Tokenizer) appendSpecialTokens(dict *dict, tokens map[Token]int) map[Token]int {
 	for k := range t.specialTokens {
+		k := buildToken(dict.Encode(k))
 		if _, ok := tokens[k]; !ok {
 			tokens[k] = 0
 		}

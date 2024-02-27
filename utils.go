@@ -20,7 +20,7 @@ func parallel(seqs []*sequence, fn func(int, *sequence)) {
 	wg.Wait()
 }
 
-func parallelMerge[Key stat | token](arr []map[Key]int, total int) map[Key]int {
+func parallelMerge[Key stat | Token](arr []map[Key]int, total int) map[Key]int {
 	type pair struct {
 		key Key
 		val int

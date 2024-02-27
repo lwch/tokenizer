@@ -11,8 +11,8 @@ import (
 )
 
 type stat struct {
-	word token
-	next token
+	word Token
+	next Token
 }
 
 func buildDict(readers []io.ReadSeekCloser) *dict {
@@ -38,7 +38,7 @@ func buildDict(readers []io.ReadSeekCloser) *dict {
 					if err == io.EOF {
 						break
 					}
-					logging.Error("read rune: %v", err)
+					logging.Error("read bytes: %v", err)
 					return
 				}
 			}
@@ -46,7 +46,7 @@ func buildDict(readers []io.ReadSeekCloser) *dict {
 
 			readen.Add(uint64(cnt))
 			pending.Add(-1)
-			logging.Info("%d rune readen, %d readers pending", readen.Load(), pending.Load())
+			logging.Info("%d bytes readen, %d readers pending", readen.Load(), pending.Load())
 		}(i, r)
 	}
 	wg.Wait()
@@ -86,8 +86,8 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 	defer r.Close()
 	var maxLen int
 	for token := range t.specialTokens {
-		if len([]rune(token)) > maxLen {
-			maxLen = len([]rune(token))
+		if len([]byte(token)) > maxLen {
+			maxLen = len([]byte(token))
 		}
 	}
 	var buf []byte
@@ -95,7 +95,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 		str := string(buf)
 		for k := range t.specialTokens {
 			if strings.HasSuffix(str, k) {
-				return buf[:len(buf)-len([]rune(k))]
+				return buf[:len(buf)-len([]byte(k))]
 			}
 		}
 		return buf
@@ -120,7 +120,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 			if err == io.EOF {
 				break
 			}
-			logging.Error("read rune: %v", err)
+			logging.Error("read bytes: %v", err)
 			return seq, cnt
 		}
 	}
@@ -132,21 +132,20 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 	return seq, cnt
 }
 
-func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) map[string]int {
-	mps := make([]map[token]int, len(seqs))
+func (t *Tokenizer) getTokens(seqs []*sequence, dict *dict, filter FilterFunc) map[Token]int {
+	mps := make([]map[Token]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
-		mp := make(map[token]int)
-		seq.Range(func(tk token) {
+		mp := make(map[Token]int)
+		seq.Range(func(tk Token) {
 			mp[tk]++
 		})
 		mps[i] = mp
 		total = len(mp)
 	})
 	tmp := parallelMerge(mps, total)
-	ret := make(map[string]int, len(tmp))
+	ret := make(map[Token]int, len(tmp))
 	for k, v := range tmp {
-		k := k.String(dict)
 		if filter != nil {
 			if !filter(k, v) {
 				continue
@@ -162,7 +161,7 @@ func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, filter FilterFunc) *s
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
 		mp := make(map[stat]int)
-		seq.RangeStat(func(word, next token) {
+		seq.RangeStat(func(word, next Token) {
 			if word.Len()+next.Len() > maxSeq {
 				return
 			}
@@ -173,7 +172,7 @@ func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, filter FilterFunc) *s
 	})
 	pairs := sortMap(parallelMerge(mps, total))
 	logging.Info("%d stats found", len(pairs))
-	exists := make(map[token]struct{})
+	exists := make(map[Token]struct{})
 	for _, pair := range pairs {
 		if _, ok := exists[pair.stat.word]; ok {
 			continue
@@ -189,8 +188,8 @@ func (t *Tokenizer) getStats(seqs []*sequence, dict *dict, filter FilterFunc) *s
 			}
 			word := dup(pair.stat.word[:pair.stat.word.Len()])
 			next := dup(pair.stat.next[:pair.stat.next.Len()])
-			str := buildToken(append(word, next...)).String(dict)
-			if !filter(str, pair.freq) {
+			tk := buildToken(append(word, next...))
+			if !filter(tk, pair.freq) {
 				continue
 			}
 		}

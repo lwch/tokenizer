@@ -27,6 +27,14 @@ func (d *dict) ID(ch byte) uint16 {
 	return uint16(d.ch2id[ch])
 }
 
-func (d *dict) Rune(id uint16) byte {
+func (d *dict) Byte(id uint16) byte {
 	return d.id2ch[id]
+}
+
+func (d *dict) Encode(s string) []uint16 {
+	var ret []uint16
+	for _, ch := range []byte(s) {
+		ret = append(ret, d.ID(ch))
+	}
+	return ret
 }

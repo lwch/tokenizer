@@ -20,7 +20,7 @@ func (s *sequence) Push(ch uint16) {
 	s.size++
 }
 
-func (s *sequence) Range(fn func(token)) {
+func (s *sequence) Range(fn func(Token)) {
 	idx := 0
 	for _, l := range s.lens {
 		if l == 0 {
@@ -31,7 +31,7 @@ func (s *sequence) Range(fn func(token)) {
 	}
 }
 
-func (s *sequence) RangeStat(fn func(token, token)) {
+func (s *sequence) RangeStat(fn func(Token, Token)) {
 	idx1 := 0
 	l1 := s.lens[0]
 	idx2 := int(l1)
@@ -49,8 +49,8 @@ func (s *sequence) RangeStat(fn func(token, token)) {
 
 func (s *sequence) String(dict *dict) string {
 	var ret []string
-	s.Range(func(tk token) {
-		ret = append(ret, "["+tk.String(dict)+"]")
+	s.Range(func(tk Token) {
+		ret = append(ret, "["+tk.string(dict)+"]")
 	})
 	return strings.Join(ret, " => ")
 }
@@ -71,7 +71,7 @@ next:
 		}
 		next := buildToken(s.tokens[idx2 : idx2+int(l)])
 		if equal(st.word, word) && equal(st.next, next) {
-			word.Merge(next)
+			word.merge(next)
 			s.lens[i] = 0
 			s.lens[idx1] += l
 			idx2 += int(l)
