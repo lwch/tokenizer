@@ -74,11 +74,25 @@ func sortMap(mp map[stat]int) []pair {
 func fmtShow(str string) string {
 	var ret string
 	for _, ch := range str {
-		if unicode.IsGraphic(ch) {
+		if unicode.IsLetter(ch) ||
+			unicode.IsNumber(ch) ||
+			unicode.IsPunct(ch) ||
+			unicode.IsSpace(ch) {
 			ret += string(ch)
-		} else {
-			ret += fmt.Sprintf("\\u%x", ch)
+			continue
 		}
+		var ok bool
+		for _, rt := range unicode.Scripts {
+			if unicode.In(ch, rt) {
+				ret += string(ch)
+				ok = true
+				break
+			}
+		}
+		if ok {
+			continue
+		}
+		ret += fmt.Sprintf("\\u%x", ch)
 	}
 	return ret
 }
