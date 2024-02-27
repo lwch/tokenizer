@@ -1,11 +1,10 @@
 package tokenizer
 
 import (
-	"fmt"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
-	"unicode"
 )
 
 func parallel(seqs []*sequence, fn func(int, *sequence)) {
@@ -71,41 +70,58 @@ func sortMap(mp map[stat]int) []pair {
 	return ret
 }
 
+// 1字节: 0xxxxxxx
+// 2字节: 110xxxxx 10xxxxxx
+// 3字节: 1110xxxx 10xxxxxx 10xxxxxx
+// 4字节: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+func getUTF8(data []byte) (bool, []byte, []byte) {
+	if data[0]&0xC0 == 0x80 { // 10xxxxxx 10xxxxxx ...
+		for i := 0; i < len(data); i++ {
+			if data[i]&0xC0 != 0x80 {
+				return false, data[:i], data[i:]
+			}
+		}
+		return false, data, nil
+	}
+	if data[0]&0x80 == 0 { // 1字节
+		return true, data[:1], data[1:]
+	}
+	if data[0]&0xE0 == 0xC0 { // 2字节
+		if len(data) < 2 {
+			return false, data, nil
+		}
+		return true, data[:2], data[2:]
+	}
+	if data[0]&0xF0 == 0xE0 { // 3字节
+		if len(data) < 3 {
+			return false, data, nil
+		}
+		return true, data[:3], data[3:]
+	}
+	if data[0]&0xF8 == 0xF0 { // 4字节
+		if len(data) < 4 {
+			return false, data, nil
+		}
+		return true, data[:4], data[4:]
+	}
+	panic("unreachable")
+}
+
 func fmtBytes(data []byte) string {
-	if len(data) == 1 {
-		ch := rune(data[0])
-		if unicode.IsLetter(ch) ||
-			unicode.IsNumber(ch) ||
-			unicode.IsPunct(ch) ||
-			unicode.IsSpace(ch) {
-			return string(ch)
-		}
-		return fmt.Sprintf("\\u%x", ch)
-	}
-	var ret string
-	for _, ch := range string(data) {
-		if unicode.IsLetter(ch) ||
-			unicode.IsNumber(ch) ||
-			unicode.IsPunct(ch) ||
-			unicode.IsSpace(ch) {
-			ret += string(ch)
-			continue
-		}
+	var ret []string
+	for len(data) > 0 {
 		var ok bool
-		for _, rt := range unicode.Scripts {
-			if rt == unicode.Common {
-				continue
-			}
-			if unicode.Is(rt, ch) {
-				ret += string(ch)
-				ok = true
-				break
-			}
-		}
+		var ch []byte
+		ok, ch, data = getUTF8(data)
 		if ok {
+			ret = append(ret, string(ch))
 			continue
 		}
-		ret += fmt.Sprintf("\\u%x", ch)
+		str := "0x"
+		for _, b := range ch {
+			str += string("0123456789abcdef"[b>>4]) + string("0123456789abcdef"[b&0x0F])
+		}
+		ret = append(ret, str)
 	}
-	return ret
+	return strings.Join(ret, "")
 }
