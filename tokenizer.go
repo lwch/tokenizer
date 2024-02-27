@@ -71,7 +71,7 @@ func (r *limitReader) Close() error {
 	return r.f.Close()
 }
 
-func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan map[Token]int, error) {
+func (t *Tokenizer) TrainFiles(files []string, size int, filter FilterFunc) (<-chan *Vocab, error) {
 	var readers []io.ReadSeekCloser
 	clear := func() {
 		for _, r := range readers {
@@ -127,13 +127,13 @@ func (nopCloser) Close() error {
 	return nil
 }
 
-func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan map[Token]int {
+func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan *Vocab {
 	r := strings.NewReader(str)
 	return t.TrainReaders([]io.ReadSeekCloser{nopCloser{r}}, size, filter)
 }
 
-func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan map[Token]int {
-	ch := make(chan map[Token]int, 1)
+func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan *Vocab {
+	ch := make(chan *Vocab, 1)
 	go func() {
 		defer close(ch)
 
@@ -147,7 +147,15 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		tokens = t.appendSpecialTokens(tokens)
 		logging.Info("got %d tokens", len(tokens))
 
-		ch <- tokens
+		getTokens := func(tokens map[Token]int) []Token {
+			var ret []Token
+			for k := range tokens {
+				ret = append(ret, k)
+			}
+			return ret
+		}
+
+		ch <- newVocab(getTokens(tokens), t.dict)
 		if len(tokens) >= size {
 			return
 		}
@@ -180,7 +188,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			tokens = t.appendSpecialTokens(tokens)
 			logging.Info("round %d, got %d tokens", i, len(tokens))
 
-			ch <- tokens
+			ch <- newVocab(getTokens(tokens), t.dict)
 			if len(tokens) >= size {
 				return
 			}
