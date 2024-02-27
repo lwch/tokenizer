@@ -74,7 +74,7 @@ func sortMap(mp map[stat]int) []pair {
 func fmtShow(str string) string {
 	var ret string
 	for _, ch := range str {
-		if unicode.IsPrint(ch) {
+		if unicode.IsGraphic(ch) {
 			ret += string(ch)
 		} else {
 			ret += fmt.Sprintf("\\u%x", ch)
