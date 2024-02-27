@@ -83,7 +83,7 @@ func fmtShow(str string) string {
 		}
 		var ok bool
 		for _, rt := range unicode.Scripts {
-			if unicode.In(ch, rt) {
+			if unicode.Is(rt, ch) {
 				ret += string(ch)
 				ok = true
 				break
