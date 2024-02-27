@@ -21,16 +21,16 @@ func buildDict(readers []io.ReadSeekCloser) *dict {
 	var readen atomic.Uint64
 	var pending atomic.Int64
 	pending.Add(int64(len(readers)))
-	mps := make([]map[rune]struct{}, len(readers))
+	mps := make([]map[byte]struct{}, len(readers))
 	for i, r := range readers {
 		go func(i int, r io.Reader) {
 			defer wg.Done()
-			mp := make(map[rune]struct{})
+			mp := make(map[byte]struct{})
 			rd := bufio.NewReader(r)
 			var cnt int
 			for {
 				str, err := rd.ReadString('\n')
-				for _, ch := range str {
+				for _, ch := range []byte(str) {
 					cnt++
 					mp[ch] = struct{}{}
 				}
@@ -50,7 +50,7 @@ func buildDict(readers []io.ReadSeekCloser) *dict {
 		}(i, r)
 	}
 	wg.Wait()
-	ret := make(map[rune]struct{})
+	ret := make(map[byte]struct{})
 	for _, mp := range mps {
 		for k := range mp {
 			ret[k] = struct{}{}
@@ -90,8 +90,8 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 			maxLen = len([]rune(token))
 		}
 	}
-	var buf []rune
-	trimSpecialTokens := func() []rune {
+	var buf []byte
+	trimSpecialTokens := func() []byte {
 		str := string(buf)
 		for k := range t.specialTokens {
 			if strings.HasSuffix(str, k) {
@@ -105,7 +105,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser, dict *dict) (*sequence, int64
 	var cnt int64
 	for {
 		str, err := rd.ReadString('\n')
-		for _, ch := range str {
+		for _, ch := range []byte(str) {
 			buf = append(buf, ch)
 			if len(buf) >= maxLen {
 				buf = trimSpecialTokens()

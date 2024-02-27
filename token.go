@@ -18,7 +18,7 @@ func (t token) Len() int {
 }
 
 func (t token) String(dict *dict) string {
-	var ret []rune
+	var ret []byte
 	for i := 0; i < maxSeq; i++ {
 		if t[i] == 0 {
 			break
