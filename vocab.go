@@ -102,6 +102,7 @@ func (v *Vocab) Encode(str string, unset int) <-chan int {
 			ret <- tk
 			tmp = tmp[size:]
 		}
+		close(ret)
 	}()
 	return ret
 }
