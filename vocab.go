@@ -148,15 +148,16 @@ func (v *Vocab) ReadFrom(r io.Reader) (int64, error) {
 	v.words2id = make(map[BSToken]int)
 	v.max = 0
 	var total int64
+	var size [1]byte
 	for {
-		var size byte
-		_, err := r.Read([]byte{size})
+		_, err := r.Read(size[:])
 		if err != nil {
 			if err == io.EOF {
 				return total, nil
 			}
 			return total, err
 		}
+		size := size[0]
 		total++
 		var tk BSToken
 		_, err = r.Read(tk[:size])
