@@ -128,8 +128,14 @@ func (v *Vocab) Decode(tokens []int) string {
 }
 
 func (v *Vocab) WriteTo(w io.Writer) (int64, error) {
+	var ids []int
+	for id := range v.id2words {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
 	var total int64
-	for _, tk := range v.id2words {
+	for _, id := range ids {
+		tk := v.id2words[id]
 		n, err := w.Write([]byte{byte(tk.Len())})
 		if err != nil {
 			return total, err
