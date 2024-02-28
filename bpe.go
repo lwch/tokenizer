@@ -172,14 +172,7 @@ func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) *stat {
 	})
 	pairs := sortMap(parallelMerge(mps, total))
 	logging.Info("%d stats found", len(pairs))
-	exists := make(map[Token]struct{})
 	for _, pair := range pairs {
-		if _, ok := exists[pair.stat.word]; ok {
-			continue
-		}
-		if _, ok := exists[pair.stat.next]; ok {
-			continue
-		}
 		if filter != nil {
 			dup := func(data []uint16) []uint16 {
 				ret := make([]uint16, len(data))
@@ -193,8 +186,6 @@ func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) *stat {
 				continue
 			}
 		}
-		exists[pair.stat.word] = struct{}{}
-		exists[pair.stat.next] = struct{}{}
 		return &pair.stat
 	}
 	return nil
