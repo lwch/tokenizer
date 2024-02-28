@@ -164,14 +164,14 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 		for {
 			i++
 
-			best := t.getStats(seqs, filter)
+			best, freq := t.getStats(seqs, filter)
 			if best == nil {
 				return
 			}
 			var merged Token
 			copy(merged[:], best.word[:])
 			merged.merge(best.next)
-			logging.Info("round %d, best stat: (%s, %s) => (%s)", i,
+			logging.Info("round %d, best stat(%d): (%s, %s) => (%s)", i, freq,
 				fmtBytes(best.word.bytes(t.dict)), fmtBytes(best.next.bytes(t.dict)),
 				fmtBytes(merged.bytes(t.dict)))
 

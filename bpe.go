@@ -156,7 +156,7 @@ func (t *Tokenizer) getTokens(seqs []*sequence, filter FilterFunc) map[Token]int
 	return ret
 }
 
-func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) *stat {
+func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) (*stat, int) {
 	mps := make([]map[stat]int, len(seqs))
 	var total int
 	parallel(seqs, func(i int, seq *sequence) {
@@ -186,9 +186,9 @@ func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) *stat {
 				continue
 			}
 		}
-		return &pair.stat
+		return &pair.stat, pair.freq
 	}
-	return nil
+	return nil, 0
 }
 
 func (t *Tokenizer) merge(seqs []*sequence, st *stat) {
