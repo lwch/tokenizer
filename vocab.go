@@ -34,7 +34,7 @@ type Vocab struct {
 	max      int
 }
 
-func newVocab(words []Token, dict *dict) *Vocab {
+func newVocab(words []Token) *Vocab {
 	sort.Slice(words, func(i, j int) bool {
 		if words[i].Len() == words[j].Len() {
 			return less(words[i], words[j])
@@ -46,7 +46,7 @@ func newVocab(words []Token, dict *dict) *Vocab {
 	var max int
 	for i, word := range words {
 		var token BSToken
-		word := word.bytes(dict)
+		word := word.Bytes()
 		copy(token[:], word)
 		id2words[i] = token
 		words2id[token] = i

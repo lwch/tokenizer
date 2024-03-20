@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"testing"
 )
 
@@ -13,7 +14,11 @@ func TestTrain(t *testing.T) {
 	tk := New()
 	tk.AddSpecialTokens(" ")
 	for vocab := range tk.Train(testData, 32, nil) {
-		fmt.Println(vocab)
+		var tokens []string
+		for _, tk := range vocab.Tokens() {
+			tokens = append(tokens, "["+string(tk)+"]")
+		}
+		fmt.Printf("%s\n", strings.Join(tokens, ", "))
 	}
 }
 

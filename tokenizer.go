@@ -14,7 +14,6 @@ const maxSeq = 32 // 单个token最大允许由32字节组成
 
 type Tokenizer struct {
 	specialTokens map[string]bool
-	dict          *dict
 }
 
 type FilterFunc func(Token, int) bool
@@ -133,12 +132,9 @@ func (t *Tokenizer) Train(str string, size int, filter FilterFunc) <-chan *Vocab
 }
 
 func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter FilterFunc) <-chan *Vocab {
-	ch := make(chan *Vocab, 1)
+	ch := make(chan *Vocab)
 	go func() {
 		defer close(ch)
-
-		t.dict = buildDict(readers)
-		logging.Info("dict size: %d", t.dict.Size())
 
 		seqs, cnt := t.loadSequence(readers)
 		logging.Info("total tokens: %d", cnt)
@@ -155,7 +151,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			return ret
 		}
 
-		ch <- newVocab(getTokens(tokens), t.dict)
+		ch <- newVocab(getTokens(tokens))
 		if len(tokens) >= size {
 			return
 		}
@@ -172,8 +168,8 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			copy(merged[:], best.word[:])
 			merged.merge(best.next)
 			logging.Info("round %d, best stat(%d): (%s, %s) => (%s)", i, freq,
-				fmtBytes(best.word.bytes(t.dict)), fmtBytes(best.next.bytes(t.dict)),
-				fmtBytes(merged.bytes(t.dict)))
+				fmtBytes(best.word.Bytes()), fmtBytes(best.next.Bytes()),
+				fmtBytes(merged.Bytes()))
 
 			t.merge(seqs, best)
 			var total int
@@ -191,7 +187,7 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 			tokens = t.appendSpecialTokens(tokens)
 			logging.Info("round %d, got %d tokens", i, len(tokens))
 
-			ch <- newVocab(getTokens(tokens), t.dict)
+			ch <- newVocab(getTokens(tokens))
 			if len(tokens) >= size {
 				return
 			}
@@ -202,14 +198,10 @@ func (t *Tokenizer) TrainReaders(readers []io.ReadSeekCloser, size int, filter F
 
 func (t *Tokenizer) appendSpecialTokens(tokens map[Token]int) map[Token]int {
 	for k := range t.specialTokens {
-		k := buildToken(t.dict.Encode(k))
+		k := buildToken([]byte(k))
 		if _, ok := tokens[k]; !ok {
 			tokens[k] = 0
 		}
 	}
 	return tokens
-}
-
-func (t *Tokenizer) Decode(tk Token) []byte {
-	return tk.bytes(t.dict)
 }

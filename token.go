@@ -1,8 +1,8 @@
 package tokenizer
 
-type Token [maxSeq]uint16
+type Token [maxSeq]byte
 
-func buildToken(data []uint16) Token {
+func buildToken(data []byte) Token {
 	var t Token
 	copy(t[:], data)
 	return t
@@ -17,15 +17,13 @@ func (t Token) Len() int {
 	return maxSeq
 }
 
-func (t Token) bytes(dict *dict) []byte {
-	var ret []byte
+func (t Token) Bytes() []byte {
 	for i := 0; i < maxSeq; i++ {
 		if t[i] == 0 {
-			break
+			return t[:i]
 		}
-		ret = append(ret, dict.Byte(t[i]))
 	}
-	return ret
+	return t[:]
 }
 
 func equal(a, b Token) bool {

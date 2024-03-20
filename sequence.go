@@ -5,7 +5,7 @@ import (
 )
 
 type sequence struct {
-	tokens []uint16
+	tokens []byte
 	lens   []byte
 	size   int
 }
@@ -14,7 +14,7 @@ func newSequence() *sequence {
 	return &sequence{}
 }
 
-func (s *sequence) Push(ch uint16) {
+func (s *sequence) Push(ch byte) {
 	s.tokens = append(s.tokens, ch)
 	s.lens = append(s.lens, 1)
 	s.size++
@@ -47,10 +47,10 @@ func (s *sequence) RangeStat(fn func(Token, Token)) {
 	}
 }
 
-func (s *sequence) String(dict *dict) string {
+func (s *sequence) String() string {
 	var ret []string
 	s.Range(func(tk Token) {
-		ret = append(ret, "["+fmtBytes(tk.bytes(dict))+"]")
+		ret = append(ret, "["+fmtBytes(tk.Bytes())+"]")
 	})
 	return strings.Join(ret, " => ")
 }

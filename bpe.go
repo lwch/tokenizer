@@ -15,56 +15,6 @@ type stat struct {
 	next Token
 }
 
-func buildDict(readers []io.ReadSeekCloser) *dict {
-	var wg sync.WaitGroup
-	wg.Add(len(readers))
-	var readen atomic.Uint64
-	var pending atomic.Int64
-	pending.Add(int64(len(readers)))
-	mps := make([]map[byte]struct{}, len(readers))
-	for i, r := range readers {
-		go func(i int, r io.Reader) {
-			defer wg.Done()
-			mp := make(map[byte]struct{})
-			rd := bufio.NewReader(r)
-			var cnt int
-			for {
-				str, err := rd.ReadString('\n')
-				for _, ch := range []byte(str) {
-					cnt++
-					mp[ch] = struct{}{}
-				}
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					logging.Error("read bytes: %v", err)
-					return
-				}
-			}
-			mps[i] = mp
-
-			readen.Add(uint64(cnt))
-			pending.Add(-1)
-			logging.Info("%d bytes readen, %d readers pending", readen.Load(), pending.Load())
-		}(i, r)
-	}
-	wg.Wait()
-	ret := make(map[byte]struct{})
-	for _, mp := range mps {
-		for k := range mp {
-			ret[k] = struct{}{}
-		}
-	}
-	for _, r := range readers {
-		_, err := r.Seek(0, io.SeekStart)
-		if err != nil {
-			panic(err)
-		}
-	}
-	return newDict(ret)
-}
-
 func (t *Tokenizer) loadSequence(readers []io.ReadSeekCloser) ([]*sequence, int) {
 	var wg sync.WaitGroup
 	var total atomic.Int64
@@ -112,7 +62,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser) (*sequence, int64) {
 			}
 			if len(buf) > 0 {
 				cnt++
-				seq.Push(t.dict.ID(buf[0]))
+				seq.Push(buf[0])
 				buf = buf[1:]
 			}
 		}
@@ -126,7 +76,7 @@ func (t *Tokenizer) buildSequence(r io.ReadCloser) (*sequence, int64) {
 	}
 	for len(buf) > 0 {
 		cnt++
-		seq.Push(t.dict.ID(buf[0]))
+		seq.Push(buf[0])
 		buf = buf[1:]
 	}
 	return seq, cnt
@@ -174,8 +124,8 @@ func (t *Tokenizer) getStats(seqs []*sequence, filter FilterFunc) (*stat, int) {
 	logging.Info("%d stats found", len(pairs))
 	for _, pair := range pairs {
 		if filter != nil {
-			dup := func(data []uint16) []uint16 {
-				ret := make([]uint16, len(data))
+			dup := func(data []byte) []byte {
+				ret := make([]byte, len(data))
 				copy(ret, data)
 				return ret
 			}
